@@ -1,0 +1,13 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Netlify will host the frontend only.
+# Keep NEXT_PUBLIC_API_BASE_URL in Netlify environment variables.
+# Recommended value when the backend is hosted separately:
+# NEXT_PUBLIC_API_BASE_URL=https://api.demovn.com/api/v1

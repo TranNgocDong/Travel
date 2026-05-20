@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+!.env.local.example
+!.env.production.example
+!.env.*.example
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.log
+*.zip
+.netlify/
+.vercel/
+.DS_Store

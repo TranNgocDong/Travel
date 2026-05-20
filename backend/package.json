@@ -1,0 +1,29 @@
+{
+  "name": "travel-tech-backend-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:migrate": "tsc -p tsconfig.json && node dist/src/db/migrate.js",
+    "db:migrate:prod": "node dist/src/db/migrate.js",
+    "db:seed": "tsc -p tsconfig.json && node dist/src/db/seed.js",
+    "db:seed:prod": "node dist/src/db/seed.js",
+    "dev": "node --watch dist/src/server.js",
+    "start": "node dist/src/server.js",
+    "test": "npm run build && node --test \"dist/tests/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.20.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "fastify": "^5.8.5",
+    "jose": "^6.2.3",
+    "pg": "^8.20.0"
+  }
+}

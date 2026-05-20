@@ -1,0 +1,9 @@
+{
+  "name": "TrailLedger",
+  "short_name": "TrailLedger",
+  "description": "Mobile-first travel planner for routes, weather, and expenses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e"
+}

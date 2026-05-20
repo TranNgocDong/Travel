@@ -1,0 +1,2 @@
+ALTER TABLE trip_participants
+  ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'editor';
