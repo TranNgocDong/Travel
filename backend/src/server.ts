@@ -946,6 +946,10 @@ function parseRoutePlanBody(body: unknown):
           lat: number;
           lng: number;
         };
+        destinationCoordinate?: {
+          lat: number;
+          lng: number;
+        };
       };
     }
   | {
@@ -960,12 +964,13 @@ function parseRoutePlanBody(body: unknown):
   const origin = parseString(input.origin);
   const destination = parseString(input.destination);
   const originCoordinate = parseGeoPoint(input.originCoordinate);
+  const destinationCoordinate = parseGeoPoint(input.destinationCoordinate);
 
   if (!originCoordinate && (!origin || origin.length < 2 || origin.length > 160)) {
     return { ok: false, message: "Điểm đi phải có từ 2 đến 160 ký tự" };
   }
 
-  if (!destination || destination.length < 2 || destination.length > 160) {
+  if (!destinationCoordinate && (!destination || destination.length < 2 || destination.length > 160)) {
     return { ok: false, message: "Điểm đến phải có từ 2 đến 160 ký tự" };
   }
 
@@ -973,8 +978,9 @@ function parseRoutePlanBody(body: unknown):
     ok: true,
     input: {
       origin: origin ?? "Vị trí của bạn",
-      destination,
+      destination: destination ?? "Điểm hẹn",
       ...(originCoordinate ? { originCoordinate } : {}),
+      ...(destinationCoordinate ? { destinationCoordinate } : {}),
     },
   };
 }

@@ -65,6 +65,7 @@ export interface RouteBuildInput {
   origin: string;
   destination: string;
   originCoordinate?: GeoPoint;
+  destinationCoordinate?: GeoPoint;
 }
 
 export class RoutePlannerError extends Error {
@@ -101,15 +102,22 @@ export async function buildOpenStreetRoutePlan(tripId: string, input: RouteBuild
   const originQuery = input.origin.trim();
   const destinationQuery = input.destination.trim();
   const originCoordinate = input.originCoordinate;
+  const destinationCoordinate = input.destinationCoordinate;
   const hasOriginCoordinate = isValidGeoPoint(originCoordinate);
+  const hasDestinationCoordinate = isValidGeoPoint(destinationCoordinate);
 
-  if ((!hasOriginCoordinate && originQuery.length < 2) || destinationQuery.length < 2 || originQuery.length > 160 || destinationQuery.length > 160) {
+  if (
+    (!hasOriginCoordinate && originQuery.length < 2) ||
+    (!hasDestinationCoordinate && destinationQuery.length < 2) ||
+    originQuery.length > 160 ||
+    destinationQuery.length > 160
+  ) {
     throw new RoutePlannerError("INVALID_ROUTE_INPUT", "Điểm đi và điểm đến phải có từ 2 đến 160 ký tự");
   }
 
   const [origin, destination] = await Promise.all([
     hasOriginCoordinate ? Promise.resolve(createCoordinatePlace(originCoordinate, originQuery || "Vị trí của bạn")) : geocodePlace(originQuery),
-    geocodePlace(destinationQuery),
+    hasDestinationCoordinate ? Promise.resolve(createCoordinatePlace(destinationCoordinate, destinationQuery || "Điểm hẹn")) : geocodePlace(destinationQuery),
   ]);
   const route = await fetchOsrmRoute(origin.coordinate, destination.coordinate);
   const waypoints = await enrichWaypointsWithWeather(

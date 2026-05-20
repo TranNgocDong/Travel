@@ -890,6 +890,58 @@ export function ExpensePlanner() {
     }
   }
 
+  async function handlePlanRouteToMember(location: ApiMemberLocation) {
+    if (isPlanningRoute || isUsingCurrentLocation) {
+      return;
+    }
+
+    if (location.userId === currentUser?.id) {
+      setApiError("Đây là vị trí của bạn.");
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setApiError("Trình duyệt không lấy được vị trí GPS");
+      return;
+    }
+
+    const destinationName = `Gặp ${location.displayName || "Thành viên"}`;
+
+    setIsUsingCurrentLocation(true);
+    setIsPlanningRoute(true);
+    setApiError(null);
+
+    try {
+      const position = await getCurrentBrowserPosition();
+      const originCoordinate = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      const destinationCoordinate = {
+        lat: location.latitude,
+        lng: location.longitude,
+      };
+
+      setRouteOrigin("Vị trí của tôi");
+      setRouteOriginCoordinate(originCoordinate);
+      setRouteDestination(destinationName);
+
+      const nextRoutePlan = await planRoute({
+        origin: "Vị trí của tôi",
+        destination: destinationName,
+        originCoordinate,
+        destinationCoordinate,
+      }, selectedTripId);
+      applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      setActiveTab("route");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới thành viên");
+    } finally {
+      setIsUsingCurrentLocation(false);
+      setIsPlanningRoute(false);
+    }
+  }
+
   function handleTripChange(nextTripId: string) {
     if (isSharingLocation) {
       void handleStopSharingLocation();
@@ -1238,6 +1290,7 @@ export function ExpensePlanner() {
           onOriginChange={handleRouteOriginChange}
           onPlanRoute={handlePlanRoute}
           onPlanRouteFromCurrentLocation={handlePlanRouteFromCurrentLocation}
+          onPlanRouteToMember={handlePlanRouteToMember}
           onStartSharingLocation={handleStartSharingLocation}
           onStopSharingLocation={handleStopSharingLocation}
           origin={routeOrigin}
@@ -1704,6 +1757,7 @@ function RouteIntelligence({
   onOriginChange,
   onPlanRoute,
   onPlanRouteFromCurrentLocation,
+  onPlanRouteToMember,
   onStartSharingLocation,
   onStopSharingLocation,
   origin,
@@ -1721,6 +1775,7 @@ function RouteIntelligence({
   onOriginChange: (value: string) => void;
   onPlanRoute: (event: FormEvent<HTMLFormElement>) => void;
   onPlanRouteFromCurrentLocation: () => void;
+  onPlanRouteToMember: (location: ApiMemberLocation) => void;
   onStartSharingLocation: () => void;
   onStopSharingLocation: () => void;
   origin: string;
@@ -1761,7 +1816,7 @@ function RouteIntelligence({
 
       <div className="route-intel-grid">
         <div className="route-map-panel">
-          <OpenStreetRouteMap currentUserId={currentUserId} memberLocations={memberLocations} routePlan={routePlan} />
+          <OpenStreetRouteMap currentUserId={currentUserId} memberLocations={memberLocations} onPlanRouteToMember={onPlanRouteToMember} routePlan={routePlan} />
           <div className="route-map-head">
             <span>
               {routePlan.origin} {" -> "} {routePlan.destination}
@@ -1803,13 +1858,20 @@ function RouteIntelligence({
             <div className="group-location-list">
               {memberLocations.length ? (
                 memberLocations.map((location) => (
-                  <div className="group-location-row" key={location.userId}>
+                  <button
+                    className={location.userId === currentUserId ? "group-location-row self" : "group-location-row"}
+                    type="button"
+                    key={location.userId}
+                    disabled={location.userId === currentUserId || isPlanningRoute || isUsingCurrentLocation}
+                    onClick={() => onPlanRouteToMember(location)}
+                  >
                     <span>{createLocationInitials(location.displayName || location.userId)}</span>
                     <div>
                       <strong>{location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên"}</strong>
                       <small>{formatLocationTime(location.sharedAt)}</small>
                     </div>
-                  </div>
+                    {location.userId !== currentUserId && <em>Đi gặp</em>}
+                  </button>
                 ))
               ) : (
                 <p>Chưa ai bật chia sẻ GPS.</p>
@@ -1831,10 +1893,12 @@ function RouteIntelligence({
 function OpenStreetRouteMap({
   currentUserId,
   memberLocations,
+  onPlanRouteToMember,
   routePlan,
 }: {
   currentUserId: string;
   memberLocations: ApiMemberLocation[];
+  onPlanRouteToMember: (location: ApiMemberLocation) => void;
   routePlan: ApiRoutePlan;
 }) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
@@ -1986,7 +2050,7 @@ function OpenStreetRouteMap({
         const label = location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên";
         const initials = createLocationInitials(label);
 
-        leaflet
+        const marker = leaflet
           .marker(latLng, {
             icon: leaflet.divIcon({
               className: location.userId === currentUserId ? "member-location-marker self" : "member-location-marker",
@@ -1996,8 +2060,13 @@ function OpenStreetRouteMap({
             }),
             title: label,
           })
-          .bindPopup(`<strong>${escapeHtml(label)}</strong><br />Cập nhật ${escapeHtml(formatLocationTime(location.sharedAt))}`)
-          .addTo(layer);
+          .bindPopup(`<strong>${escapeHtml(label)}</strong><br />Cập nhật ${escapeHtml(formatLocationTime(location.sharedAt))}`);
+
+        if (location.userId !== currentUserId) {
+          marker.on("click", () => onPlanRouteToMember(location));
+        }
+
+        marker.addTo(layer);
 
         if (location.accuracyMeters && location.accuracyMeters > 0) {
           leaflet
@@ -2021,7 +2090,7 @@ function OpenStreetRouteMap({
     return () => {
       cancelled = true;
     };
-  }, [clearMemberLocationLayer, currentUserId, memberLocations, status]);
+  }, [clearMemberLocationLayer, currentUserId, memberLocations, onPlanRouteToMember, status]);
 
   useEffect(() => {
     let cancelled = false;

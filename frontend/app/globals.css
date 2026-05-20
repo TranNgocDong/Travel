@@ -987,8 +987,25 @@ button {
 }
 
 .group-location-row {
+  width: 100%;
   min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
   gap: 8px;
+  padding: 6px;
+  text-align: left;
+}
+
+.group-location-row:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  background: var(--panel);
+}
+
+.group-location-row:disabled {
+  cursor: default;
+  opacity: 0.86;
 }
 
 .group-location-row > span {
@@ -1005,8 +1022,13 @@ button {
   font-weight: 950;
 }
 
+.group-location-row.self > span {
+  background: #2563eb;
+}
+
 .group-location-row div {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
   gap: 1px;
 }
@@ -1025,6 +1047,18 @@ button {
 .group-location-row small {
   color: var(--muted);
   font-size: 0.74rem;
+}
+
+.group-location-row em {
+  margin-left: auto;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 5px 8px;
+  white-space: nowrap;
 }
 
 .waypoint-list {

@@ -325,7 +325,15 @@ export async function fetchRoutePlan(targetTripId = defaultTripId): Promise<ApiR
   return data.routePlan;
 }
 
-export async function planRoute(payload: { origin: string; destination: string; originCoordinate?: ApiGeoPoint }, targetTripId = defaultTripId): Promise<ApiRoutePlan> {
+export async function planRoute(
+  payload: {
+    origin: string;
+    destination: string;
+    originCoordinate?: ApiGeoPoint;
+    destinationCoordinate?: ApiGeoPoint;
+  },
+  targetTripId = defaultTripId,
+): Promise<ApiRoutePlan> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/route-plan`, {
     method: "POST",
     headers: {
