@@ -621,7 +621,8 @@ button {
 }
 
 .route-map-panel,
-.next-stop-card {
+.next-stop-card,
+.group-location-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
@@ -629,6 +630,11 @@ button {
 }
 
 .route-map-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.route-side-stack {
   display: grid;
   gap: 10px;
 }
@@ -774,6 +780,29 @@ button {
   background: #ffffff;
 }
 
+.member-location-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px !important;
+  height: 32px !important;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.24);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.member-location-marker.self {
+  background: #2563eb;
+}
+
+.member-location-marker span {
+  transform: translateY(-0.5px);
+}
+
 .route-map-head {
   display: flex;
   align-items: center;
@@ -836,6 +865,123 @@ button {
 .next-stop-card p {
   margin: 0;
   line-height: 1.4;
+}
+
+.group-location-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.group-location-head,
+.group-location-row {
+  display: flex;
+  align-items: center;
+}
+
+.group-location-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.group-location-head strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.location-share-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  min-width: 76px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 900;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.location-share-button.active {
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.location-share-note {
+  margin: 0;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
+.location-share-note.sharing {
+  color: var(--accent-strong);
+}
+
+.location-share-note.denied,
+.location-share-note.unavailable,
+.location-share-note.error {
+  color: var(--danger);
+}
+
+.group-location-list {
+  display: grid;
+  gap: 7px;
+}
+
+.group-location-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.group-location-row {
+  min-width: 0;
+  gap: 8px;
+}
+
+.group-location-row > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.group-location-row div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.group-location-row strong,
+.group-location-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-location-row strong {
+  font-size: 0.86rem;
+}
+
+.group-location-row small {
+  color: var(--muted);
+  font-size: 0.74rem;
 }
 
 .waypoint-list {

@@ -1,4 +1,4 @@
-export type LiveSyncEventType = "expense_created" | "member_changed" | "route_plan_updated";
+export type LiveSyncEventType = "expense_created" | "member_changed" | "route_plan_updated" | "location_updated" | "location_stopped";
 
 export interface LiveSyncEvent {
   id: string;

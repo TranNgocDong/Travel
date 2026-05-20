@@ -13,6 +13,11 @@ import { DuplicateExpenseIdError, InMemoryExpenseRepository, type ExpenseReposit
 import { PostgresExpenseRepository } from "./expense/postgresExpenseRepository.js";
 import { calculateSplitBill, SplitBillError, type CurrencyCode, type ExpenseSplit } from "./expense/splitBill.js";
 import { LiveSyncHub, type LiveSyncEventType } from "./liveSync/liveSyncHub.js";
+import {
+  InMemoryTripMemberLocationRepository,
+  PostgresTripMemberLocationRepository,
+  type TripMemberLocationRepository,
+} from "./locations/memberLocationRepository.js";
 import { InMemoryRoutePlanRepository, PostgresRoutePlanRepository, type RoutePlanRepository } from "./route/routePlanRepository.js";
 import { buildOpenStreetRoutePlan, buildStarterRoutePlan, RoutePlannerError } from "./route/routePlanner.js";
 import { canManageMembers, canWriteTrip, TripAccessService, type TripRole } from "./trips/tripAccess.js";
@@ -34,6 +39,9 @@ if (isProduction && !databaseUrl) {
 const pool = databaseUrl ? createPool() : null;
 const repository: ExpenseRepository = pool ? new PostgresExpenseRepository(pool) : new InMemoryExpenseRepository();
 const memberRepository: TripMemberRepository = pool ? new PostgresTripMemberRepository(pool) : new InMemoryTripMemberRepository();
+const locationRepository: TripMemberLocationRepository = pool
+  ? new PostgresTripMemberLocationRepository(pool)
+  : new InMemoryTripMemberLocationRepository();
 const routePlanRepository: RoutePlanRepository = pool ? new PostgresRoutePlanRepository(pool) : new InMemoryRoutePlanRepository();
 const tripRepository: TripRepository = pool ? new PostgresTripRepository(pool) : new InMemoryTripRepository();
 const tripAccess = new TripAccessService(memberRepository);
@@ -289,6 +297,82 @@ app.get("/api/v1/trips/:tripId/members", async (request, reply) => {
   return {
     members: await memberRepository.listByTrip(tripId),
   };
+});
+
+app.get("/api/v1/trips/:tripId/locations", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  await locationRepository.pruneExpired();
+
+  return {
+    locations: await locationRepository.listActiveByTrip(tripId),
+  };
+});
+
+app.put("/api/v1/trips/:tripId/locations/me", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const parsed = parseLocationBody(request.body);
+
+  if (!parsed.ok) {
+    return reply.status(400).send({
+      error: "VALIDATION_ERROR",
+      message: parsed.message,
+    });
+  }
+
+  const location = await locationRepository.upsert({
+    tripId,
+    userId: user.id,
+    ...parsed.location,
+  });
+  publishTripChange(tripId, user.id, "location_updated");
+
+  return {
+    location: {
+      ...location,
+      displayName: user.displayName,
+    },
+  };
+});
+
+app.delete("/api/v1/trips/:tripId/locations/me", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  await locationRepository.remove(tripId, user.id);
+  publishTripChange(tripId, user.id, "location_stopped");
+
+  return reply.status(204).send();
 });
 
 app.post("/api/v1/trips/:tripId/members", async (request, reply) => {
@@ -792,6 +876,68 @@ function parseGeoPoint(value: unknown): { lat: number; lng: number } | undefined
   return { lat, lng };
 }
 
+function parseLocationBody(body: unknown):
+  | {
+      ok: true;
+      location: {
+        latitude: number;
+        longitude: number;
+        accuracyMeters?: number | null;
+        speedMps?: number | null;
+        headingDegrees?: number | null;
+      };
+    }
+  | {
+      ok: false;
+      message: string;
+    } {
+  if (!body || typeof body !== "object") {
+    return { ok: false, message: "Request body must be an object" };
+  }
+
+  const input = body as Record<string, unknown>;
+  const latitude = parseFiniteNumber(input.latitude);
+  const longitude = parseFiniteNumber(input.longitude);
+  const accuracyMeters = parseOptionalFiniteNumber(input.accuracyMeters);
+  const speedMps = parseOptionalFiniteNumber(input.speedMps);
+  const headingDegrees = parseOptionalFiniteNumber(input.headingDegrees);
+
+  if (latitude === null || latitude < -90 || latitude > 90) {
+    return { ok: false, message: "Latitude must be between -90 and 90" };
+  }
+
+  if (longitude === null || longitude < -180 || longitude > 180) {
+    return { ok: false, message: "Longitude must be between -180 and 180" };
+  }
+
+  if (accuracyMeters === undefined || speedMps === undefined || headingDegrees === undefined) {
+    return { ok: false, message: "Location metadata is invalid" };
+  }
+
+  if (accuracyMeters !== null && (accuracyMeters < 0 || accuracyMeters > 100_000)) {
+    return { ok: false, message: "Accuracy is outside the supported range" };
+  }
+
+  if (speedMps !== null && (speedMps < 0 || speedMps > 140)) {
+    return { ok: false, message: "Speed is outside the supported range" };
+  }
+
+  if (headingDegrees !== null && (headingDegrees < 0 || headingDegrees > 360)) {
+    return { ok: false, message: "Heading must be between 0 and 360 degrees" };
+  }
+
+  return {
+    ok: true,
+    location: {
+      latitude,
+      longitude,
+      accuracyMeters,
+      speedMps,
+      headingDegrees,
+    },
+  };
+}
+
 function parseMemberBody(body: unknown):
   | {
       ok: true;
@@ -974,6 +1120,20 @@ function parseSplit(value: unknown):
 
 function parseString(value: unknown): string | null {
   return typeof value === "string" ? value.trim() : null;
+}
+
+function parseFiniteNumber(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOptionalFiniteNumber(value: unknown): number | null | undefined {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = parseFiniteNumber(value);
+  return parsed === null ? undefined : parsed;
 }
 
 function parseStringArray(value: unknown): string[] {

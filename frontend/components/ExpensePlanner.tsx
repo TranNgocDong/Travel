@@ -32,6 +32,7 @@ import {
   fetchExpenses,
   fetchMe,
   fetchRoutePlan,
+  fetchTripLocations,
   fetchSettlementResult,
   fetchTripMembers,
   fetchTrips,
@@ -41,13 +42,16 @@ import {
   logout,
   planRoute,
   removeTripMember,
+  shareMyLocation,
   subscribeToTripEvents,
+  stopSharingMyLocation,
   updateTripMember,
   type ApiBalance,
   type ApiCreateExpensePayload,
   type ApiExpense,
   type ApiExpenseSplit,
   type ApiGeoPoint,
+  type ApiMemberLocation,
   type ApiRoutePlan,
   type ApiRouteStopKind,
   type ApiRouteWaypoint,
@@ -80,6 +84,8 @@ const categories = [
   { id: "border", label: "Cua khau", icon: ShieldCheck },
 ];
 
+const locationShareIntervalMs = 15_000;
+
 export function ExpensePlanner() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeTab, setActiveTab] = useState<MobileTab>("route");
@@ -89,6 +95,7 @@ export function ExpensePlanner() {
   const [selectedTripId, setSelectedTripId] = useState(defaultTripId);
   const [balances, setBalances] = useState<ApiBalance[]>([]);
   const [settlements, setSettlements] = useState<ApiSettlement[]>([]);
+  const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
   const [routePlan, setRoutePlan] = useState<ApiRoutePlan | null>(null);
   const [routeOrigin, setRouteOrigin] = useState("");
   const [routeOriginCoordinate, setRouteOriginCoordinate] = useState<ApiGeoPoint | null>(null);
@@ -114,6 +121,8 @@ export function ExpensePlanner() {
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [isPlanningRoute, setIsPlanningRoute] = useState(false);
   const [isUsingCurrentLocation, setIsUsingCurrentLocation] = useState(false);
+  const [isSharingLocation, setIsSharingLocation] = useState(false);
+  const [locationShareStatus, setLocationShareStatus] = useState<LocationShareStatus>("idle");
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
   const [loginEmail, setLoginEmail] = useState("");
@@ -125,6 +134,8 @@ export function ExpensePlanner() {
   const [newMemberRole, setNewMemberRole] = useState<ApiTripRole>("viewer");
   const loadTripDataInFlightRef = useRef(false);
   const routeFormDirtyRef = useRef(false);
+  const locationShareWatchIdRef = useRef<number | null>(null);
+  const lastSharedPositionAtRef = useRef(0);
 
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
     routeFormDirtyRef.current = false;
@@ -175,6 +186,7 @@ export function ExpensePlanner() {
         setExpenses([]);
         setBalances([]);
         setSettlements([]);
+        setMemberLocations([]);
         setRoutePlan(null);
         setOfflineReady(false);
         setLastSyncedAt(new Date());
@@ -189,11 +201,12 @@ export function ExpensePlanner() {
         return;
       }
 
-      const [nextMembers, nextExpenses, result, nextRoutePlan] = await Promise.all([
+      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations] = await Promise.all([
         fetchTripMembers(selectedTripId),
         fetchExpenses(selectedTripId),
         fetchSettlementResult(selectedTripId),
         fetchRoutePlan(selectedTripId),
+        fetchTripLocations(selectedTripId).catch(() => []),
       ]);
       const mappedMembers = nextMembers.map(mapTripMember);
       const memberIds = mappedMembers.map((member) => member.id);
@@ -206,6 +219,7 @@ export function ExpensePlanner() {
       setExpenses(nextExpenses);
       setBalances(result.balances);
       setSettlements(result.settlements);
+      setMemberLocations(nextLocations);
       if (canUpdateRouteForm) {
         applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       } else {
@@ -232,6 +246,14 @@ export function ExpensePlanner() {
       } else {
         setIsLoading(false);
       }
+    }
+  }, [selectedTripId]);
+
+  const loadTripLocations = useCallback(async (targetTripId = selectedTripId) => {
+    try {
+      setMemberLocations(await fetchTripLocations(targetTripId));
+    } catch {
+      // GPS sharing is helpful, but it should not block the rest of the trip screen.
     }
   }, [selectedTripId]);
 
@@ -414,6 +436,11 @@ export function ExpensePlanner() {
         }
 
         refreshTimeout = window.setTimeout(() => {
+          if (event.type === "location_updated" || event.type === "location_stopped") {
+            void loadTripLocations(activeTrip.id);
+            return;
+          }
+
           void loadTripData({ silent: true });
         }, 250);
       },
@@ -427,7 +454,13 @@ export function ExpensePlanner() {
       setIsLiveSyncConnected(false);
       unsubscribe();
     };
-  }, [activeTrip?.id, currentUser, loadTripData]);
+  }, [activeTrip?.id, currentUser, loadTripData, loadTripLocations]);
+
+  useEffect(() => {
+    return () => {
+      clearLocationShareWatch();
+    };
+  }, []);
 
   function toggleTheme() {
     const nextTheme = theme === "dark" ? "light" : "dark";
@@ -451,6 +484,102 @@ export function ExpensePlanner() {
       ...current,
       [memberId]: value,
     }));
+  }
+
+  function clearLocationShareWatch() {
+    if (locationShareWatchIdRef.current !== null && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(locationShareWatchIdRef.current);
+    }
+
+    locationShareWatchIdRef.current = null;
+  }
+
+  function handleStartSharingLocation() {
+    if (!currentUser || !selectedTripId) {
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setLocationShareStatus("unavailable");
+      setApiError("Trinh duyet khong lay duoc vi tri GPS");
+      return;
+    }
+
+    if (locationShareWatchIdRef.current !== null) {
+      return;
+    }
+
+    setApiError(null);
+    setIsSharingLocation(true);
+    setLocationShareStatus("starting");
+    lastSharedPositionAtRef.current = 0;
+
+    locationShareWatchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const now = Date.now();
+
+        if (lastSharedPositionAtRef.current && now - lastSharedPositionAtRef.current < locationShareIntervalMs) {
+          return;
+        }
+
+        lastSharedPositionAtRef.current = now;
+        void shareMyLocation(
+          {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy,
+            speedMps: position.coords.speed,
+            headingDegrees: position.coords.heading,
+          },
+          selectedTripId,
+        )
+          .then((location) => {
+            const namedLocation = {
+              ...location,
+              displayName: location.displayName || currentUser.displayName,
+            };
+            setMemberLocations((current) => [namedLocation, ...current.filter((item) => item.userId !== namedLocation.userId)]);
+            setLocationShareStatus("sharing");
+          })
+          .catch((error) => {
+            setLocationShareStatus("error");
+            setApiError(error instanceof Error ? error.message : "Khong chia se duoc vi tri");
+          });
+      },
+      (error) => {
+        clearLocationShareWatch();
+        setIsSharingLocation(false);
+        setLocationShareStatus(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
+        setApiError(error.code === error.PERMISSION_DENIED ? "Can cho phep quyen vi tri de chia se GPS" : "Khong lay duoc vi tri GPS");
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 15000,
+      },
+    );
+  }
+
+  async function handleStopSharingLocation(options: { notifyServer?: boolean } = {}) {
+    const shouldNotifyServer = options.notifyServer ?? true;
+    const tripIdToStop = selectedTripId;
+    const userIdToStop = currentUser?.id;
+
+    clearLocationShareWatch();
+    setIsSharingLocation(false);
+    setLocationShareStatus("idle");
+
+    if (userIdToStop) {
+      setMemberLocations((current) => current.filter((item) => item.userId !== userIdToStop));
+    }
+
+    if (shouldNotifyServer && tripIdToStop) {
+      try {
+        await stopSharingMyLocation(tripIdToStop);
+      } catch {
+        // The shared point expires automatically, so failing to stop it immediately is not critical.
+      }
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -612,6 +741,10 @@ export function ExpensePlanner() {
   }
 
   function handleTripChange(nextTripId: string) {
+    if (isSharingLocation) {
+      void handleStopSharingLocation();
+    }
+
     routeFormDirtyRef.current = false;
     setSelectedTripId(nextTripId);
     window.localStorage.setItem(selectedTripCacheKey(), nextTripId);
@@ -621,6 +754,7 @@ export function ExpensePlanner() {
     setBalances([]);
     setSettlements([]);
     setMembers([]);
+    setMemberLocations([]);
     const cachedRoutePlan = readCachedRoutePlan(nextTripId);
 
     if (cachedRoutePlan) {
@@ -666,12 +800,15 @@ export function ExpensePlanner() {
   }
 
   async function handleLogout() {
+    await handleStopSharingLocation();
     await logout();
     setCurrentUser(null);
     setTrips([]);
     setExpenses([]);
     setBalances([]);
     setSettlements([]);
+    setMembers([]);
+    setMemberLocations([]);
     setRoutePlan(null);
     setLastSyncedAt(null);
   }
@@ -927,12 +1064,18 @@ export function ExpensePlanner() {
       {routePlan && trips.length > 0 && (
         <RouteIntelligence
           destination={routeDestination}
+          currentUserId={currentUser.id}
           isPlanningRoute={isPlanningRoute}
+          isSharingLocation={isSharingLocation}
           isUsingCurrentLocation={isUsingCurrentLocation}
+          locationShareStatus={locationShareStatus}
+          memberLocations={memberLocations}
           onDestinationChange={handleRouteDestinationChange}
           onOriginChange={handleRouteOriginChange}
           onPlanRoute={handlePlanRoute}
           onPlanRouteFromCurrentLocation={handlePlanRouteFromCurrentLocation}
+          onStartSharingLocation={handleStartSharingLocation}
+          onStopSharingLocation={handleStopSharingLocation}
           origin={routeOrigin}
           originCoordinate={routeOriginCoordinate}
           routePlan={routePlan}
@@ -1182,24 +1325,36 @@ export function ExpensePlanner() {
 }
 
 function RouteIntelligence({
+  currentUserId,
   destination,
   isPlanningRoute,
+  isSharingLocation,
   isUsingCurrentLocation,
+  locationShareStatus,
+  memberLocations,
   onDestinationChange,
   onOriginChange,
   onPlanRoute,
   onPlanRouteFromCurrentLocation,
+  onStartSharingLocation,
+  onStopSharingLocation,
   origin,
   originCoordinate,
   routePlan,
 }: {
+  currentUserId: string;
   destination: string;
   isPlanningRoute: boolean;
+  isSharingLocation: boolean;
   isUsingCurrentLocation: boolean;
+  locationShareStatus: LocationShareStatus;
+  memberLocations: ApiMemberLocation[];
   onDestinationChange: (value: string) => void;
   onOriginChange: (value: string) => void;
   onPlanRoute: (event: FormEvent<HTMLFormElement>) => void;
   onPlanRouteFromCurrentLocation: () => void;
+  onStartSharingLocation: () => void;
+  onStopSharingLocation: () => void;
   origin: string;
   originCoordinate: ApiGeoPoint | null;
   routePlan: ApiRoutePlan;
@@ -1238,7 +1393,7 @@ function RouteIntelligence({
 
       <div className="route-intel-grid">
         <div className="route-map-panel">
-          <OpenStreetRouteMap routePlan={routePlan} />
+          <OpenStreetRouteMap currentUserId={currentUserId} memberLocations={memberLocations} routePlan={routePlan} />
           <div className="route-map-head">
             <span>
               {routePlan.origin} {" -> "} {routePlan.destination}
@@ -1252,10 +1407,47 @@ function RouteIntelligence({
           </div>
         </div>
 
-        <div className="next-stop-card">
-          <span className="eyebrow">Can chu y tiep theo</span>
-          <strong>{routePlan.summary.nextCriticalStop ?? "Khong co canh bao"}</strong>
-          <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chang hien tai on dinh."}</p>
+        <div className="route-side-stack">
+          <div className="next-stop-card">
+            <span className="eyebrow">Can chu y tiep theo</span>
+            <strong>{routePlan.summary.nextCriticalStop ?? "Khong co canh bao"}</strong>
+            <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chang hien tai on dinh."}</p>
+          </div>
+
+          <div className="group-location-card">
+            <div className="group-location-head">
+              <div>
+                <span className="eyebrow">GPS nhom</span>
+                <strong>{memberLocations.length} dang chia se</strong>
+              </div>
+              <button
+                className={isSharingLocation ? "location-share-button active" : "location-share-button"}
+                type="button"
+                onClick={isSharingLocation ? onStopSharingLocation : onStartSharingLocation}
+              >
+                <Navigation size={16} />
+                <span>{isSharingLocation ? "Tat" : "Bat"}</span>
+              </button>
+            </div>
+
+            {locationShareStatus !== "idle" && <p className={`location-share-note ${locationShareStatus}`}>{locationShareStatusText(locationShareStatus)}</p>}
+
+            <div className="group-location-list">
+              {memberLocations.length ? (
+                memberLocations.map((location) => (
+                  <div className="group-location-row" key={location.userId}>
+                    <span>{createLocationInitials(location.displayName || location.userId)}</span>
+                    <div>
+                      <strong>{location.userId === currentUserId ? "Ban" : location.displayName || "Thanh vien"}</strong>
+                      <small>{formatLocationTime(location.sharedAt)}</small>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p>Chua ai bat chia se GPS.</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1268,13 +1460,22 @@ function RouteIntelligence({
   );
 }
 
-function OpenStreetRouteMap({ routePlan }: { routePlan: ApiRoutePlan }) {
+function OpenStreetRouteMap({
+  currentUserId,
+  memberLocations,
+  routePlan,
+}: {
+  currentUserId: string;
+  memberLocations: ApiMemberLocation[];
+  routePlan: ApiRoutePlan;
+}) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
   const leafletModuleRef = useRef<typeof import("leaflet") | null>(null);
   const locationWatchIdRef = useRef<number | null>(null);
   const userMarkerRef = useRef<import("leaflet").Marker | null>(null);
   const userAccuracyRef = useRef<import("leaflet").Circle | null>(null);
+  const memberLocationLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const [status, setStatus] = useState<LeafletMapStatus>("loading");
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationWatchStatus>("idle");
@@ -1284,6 +1485,11 @@ function OpenStreetRouteMap({ routePlan }: { routePlan: ApiRoutePlan }) {
     userAccuracyRef.current?.remove();
     userMarkerRef.current = null;
     userAccuracyRef.current = null;
+  }, []);
+
+  const clearMemberLocationLayer = useCallback(() => {
+    memberLocationLayerRef.current?.remove();
+    memberLocationLayerRef.current = null;
   }, []);
 
   const updateUserPosition = useCallback(async (position: GeolocationPosition) => {
@@ -1385,6 +1591,71 @@ function OpenStreetRouteMap({ routePlan }: { routePlan: ApiRoutePlan }) {
   }, [updateUserPosition]);
 
   useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (status !== "ready" || !map) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void import("leaflet").then((leaflet) => {
+      if (cancelled || !mapInstanceRef.current) {
+        return;
+      }
+
+      leafletModuleRef.current = leaflet;
+      clearMemberLocationLayer();
+
+      if (!memberLocations.length) {
+        return;
+      }
+
+      const layer = leaflet.layerGroup();
+
+      for (const location of memberLocations) {
+        const latLng = leaflet.latLng(location.latitude, location.longitude);
+        const label = location.userId === currentUserId ? "Ban" : location.displayName || "Thanh vien";
+        const initials = createLocationInitials(label);
+
+        leaflet
+          .marker(latLng, {
+            icon: leaflet.divIcon({
+              className: location.userId === currentUserId ? "member-location-marker self" : "member-location-marker",
+              html: `<span>${escapeHtml(initials)}</span>`,
+              iconAnchor: [16, 16],
+              iconSize: [32, 32],
+            }),
+            title: label,
+          })
+          .bindPopup(`<strong>${escapeHtml(label)}</strong><br />Cap nhat ${escapeHtml(formatLocationTime(location.sharedAt))}`)
+          .addTo(layer);
+
+        if (location.accuracyMeters && location.accuracyMeters > 0) {
+          leaflet
+            .circle(latLng, {
+              className: "member-location-radius",
+              color: location.userId === currentUserId ? "#2563eb" : "#0f766e",
+              fillColor: location.userId === currentUserId ? "#3b82f6" : "#14b8a6",
+              fillOpacity: 0.08,
+              opacity: 0.18,
+              radius: Math.max(location.accuracyMeters, 12),
+              weight: 1,
+            })
+            .addTo(layer);
+        }
+      }
+
+      layer.addTo(map);
+      memberLocationLayerRef.current = layer;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearMemberLocationLayer, currentUserId, memberLocations, status]);
+
+  useEffect(() => {
     let cancelled = false;
     const points = routePlan.geometry.length ? routePlan.geometry : routePlan.waypoints.map((waypoint) => waypoint.coordinate);
 
@@ -1403,6 +1674,7 @@ function OpenStreetRouteMap({ routePlan }: { routePlan: ApiRoutePlan }) {
 
         mapInstanceRef.current?.remove();
         clearUserLocationLayer();
+        clearMemberLocationLayer();
         leafletModuleRef.current = leaflet;
 
         const latLngs = points.map((point) => leaflet.latLng(point.lat, point.lng));
@@ -1464,8 +1736,9 @@ function OpenStreetRouteMap({ routePlan }: { routePlan: ApiRoutePlan }) {
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       clearUserLocationLayer();
+      clearMemberLocationLayer();
     };
-  }, [clearUserLocationLayer, routePlan]);
+  }, [clearMemberLocationLayer, clearUserLocationLayer, routePlan]);
 
   useEffect(() => {
     return () => {
@@ -1600,6 +1873,14 @@ function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
     return "nhom vua doi";
   }
 
+  if (type === "location_updated") {
+    return "GPS nhom vua cap nhat";
+  }
+
+  if (type === "location_stopped") {
+    return "co nguoi tat GPS";
+  }
+
   return "tuyen vua doi";
 }
 
@@ -1659,6 +1940,32 @@ function createInitials(name: string): string {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
     .padEnd(2, "?");
+}
+
+function createLocationInitials(name: string): string {
+  return createInitials(name).slice(0, 2);
+}
+
+function formatLocationTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "vua xong";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function findMember(members: TripMemberView[], memberId: string): Member {
@@ -1873,6 +2180,7 @@ function weatherSourceLabel(source: NonNullable<ApiRouteWaypoint["weather"]["sou
 
 type LeafletMapStatus = "loading" | "ready" | "error";
 type LocationWatchStatus = "idle" | "searching" | "watching" | "denied" | "unavailable";
+type LocationShareStatus = "idle" | "starting" | "sharing" | "denied" | "unavailable" | "error";
 
 function leafletMapStatusText(status: LeafletMapStatus): string {
   if (status === "error") {
@@ -1897,6 +2205,30 @@ function locationWatchStatusText(status: LocationWatchStatus): string {
 
   if (status === "unavailable") {
     return "Khong lay duoc vi tri";
+  }
+
+  return "";
+}
+
+function locationShareStatusText(status: LocationShareStatus): string {
+  if (status === "starting") {
+    return "Dang xin GPS de chia se cho nhom";
+  }
+
+  if (status === "sharing") {
+    return "Dang chia se vi tri moi 15 giay";
+  }
+
+  if (status === "denied") {
+    return "Can cho phep quyen vi tri";
+  }
+
+  if (status === "unavailable") {
+    return "Khong lay duoc GPS tren may nay";
+  }
+
+  if (status === "error") {
+    return "Chua gui duoc vi tri, se thu lai";
   }
 
   return "";

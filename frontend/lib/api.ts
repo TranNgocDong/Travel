@@ -153,10 +153,23 @@ export type ApiRoutePlan = {
   waypoints: ApiRouteWaypoint[];
 };
 
+export type ApiMemberLocation = {
+  tripId: string;
+  userId: string;
+  displayName: string;
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number | null;
+  speedMps: number | null;
+  headingDegrees: number | null;
+  sharedAt: string;
+  expiresAt: string;
+};
+
 export type ApiTripLiveEvent = {
   id: string;
   tripId: string;
-  type: "expense_created" | "member_changed" | "route_plan_updated";
+  type: "expense_created" | "member_changed" | "route_plan_updated" | "location_updated" | "location_stopped";
   actorUserId: string;
   createdAt: string;
 };
@@ -243,6 +256,14 @@ export async function fetchTripMembers(targetTripId = defaultTripId): Promise<Ap
   return data.members;
 }
 
+export async function fetchTripLocations(targetTripId = defaultTripId): Promise<ApiMemberLocation[]> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ locations: ApiMemberLocation[] }>(response);
+  return data.locations;
+}
+
 export async function fetchRoutePlan(targetTripId = defaultTripId): Promise<ApiRoutePlan> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/route-plan`, {
     cache: "no-store",
@@ -261,6 +282,39 @@ export async function planRoute(payload: { origin: string; destination: string; 
   });
   const data = await parseApiResponse<{ routePlan: ApiRoutePlan }>(response);
   return data.routePlan;
+}
+
+export async function shareMyLocation(
+  payload: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+    speedMps?: number | null;
+    headingDegrees?: number | null;
+  },
+  targetTripId = defaultTripId,
+): Promise<ApiMemberLocation> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations/me`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse<{ location: ApiMemberLocation }>(response);
+  return data.location;
+}
+
+export async function stopSharingMyLocation(targetTripId = defaultTripId): Promise<void> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations/me`, {
+    method: "DELETE",
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  await parseApiResponse(response);
 }
 
 export async function addTripMember(payload: { displayName?: string; email?: string; role: ApiTripRole }, targetTripId = defaultTripId): Promise<ApiTripMember> {
