@@ -6,7 +6,7 @@ import type { CurrencyCode } from "./settlements";
 export const defaultTripId = process.env.NEXT_PUBLIC_DEFAULT_TRIP_ID ?? "";
 export const tripId = defaultTripId;
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1";
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV === "production" ? "https://travel-4bm4.onrender.com/api/v1" : "http://localhost:4000/api/v1");
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
