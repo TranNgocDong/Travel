@@ -223,6 +223,7 @@ app.get("/api/v1/trips/:tripId/events", async (request, reply) => {
   }
 
   const clientId = randomUUID();
+  const wasUserOnline = liveSyncHub.hasUser(tripId, user.id);
   reply.hijack();
   reply.raw.writeHead(200, buildLiveSyncHeaders(request.headers.origin));
   reply.raw.write(`event: ready\ndata: ${JSON.stringify({ clientId, tripId })}\n\n`);
@@ -231,10 +232,16 @@ app.get("/api/v1/trips/:tripId/events", async (request, reply) => {
     id: clientId,
     tripId,
     userId: user.id,
+    displayName: user.displayName,
+    connectedAt: new Date().toISOString(),
     send: (event) => {
       reply.raw.write(`id: ${event.id}\nevent: trip_changed\ndata: ${JSON.stringify(event)}\n\n`);
     },
   });
+
+  if (!wasUserOnline) {
+    publishTripChange(tripId, user.id, "presence_joined", user.displayName);
+  }
 
   const heartbeat = setInterval(() => {
     reply.raw.write(`event: ping\ndata: ${JSON.stringify({ at: new Date().toISOString() })}\n\n`);
@@ -243,7 +250,29 @@ app.get("/api/v1/trips/:tripId/events", async (request, reply) => {
   request.raw.on("close", () => {
     clearInterval(heartbeat);
     removeClient();
+
+    if (!liveSyncHub.hasUser(tripId, user.id)) {
+      publishTripChange(tripId, user.id, "presence_left", user.displayName);
+    }
   });
+});
+
+app.get("/api/v1/trips/:tripId/presence", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  return {
+    presence: liveSyncHub.listPresence(tripId),
+  };
 });
 
 app.post("/api/v1/trips/:tripId/route-plan", async (request, reply) => {
@@ -632,11 +661,12 @@ try {
   process.exit(1);
 }
 
-function publishTripChange(tripId: string, actorUserId: string, type: LiveSyncEventType) {
+function publishTripChange(tripId: string, actorUserId: string, type: LiveSyncEventType, actorDisplayName?: string) {
   liveSyncHub.publish({
     tripId,
     actorUserId,
     type,
+    ...(actorDisplayName ? { actorDisplayName } : {}),
   });
 }
 

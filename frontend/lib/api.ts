@@ -166,11 +166,19 @@ export type ApiMemberLocation = {
   expiresAt: string;
 };
 
+export type ApiPresenceUser = {
+  userId: string;
+  displayName: string;
+  onlineSince: string;
+  connectionCount: number;
+};
+
 export type ApiTripLiveEvent = {
   id: string;
   tripId: string;
-  type: "expense_created" | "member_changed" | "route_plan_updated" | "location_updated" | "location_stopped";
+  type: "expense_created" | "member_changed" | "route_plan_updated" | "location_updated" | "location_stopped" | "presence_joined" | "presence_left";
   actorUserId: string;
+  actorDisplayName?: string;
   createdAt: string;
 };
 
@@ -262,6 +270,14 @@ export async function fetchTripLocations(targetTripId = defaultTripId): Promise<
   });
   const data = await parseApiResponse<{ locations: ApiMemberLocation[] }>(response);
   return data.locations;
+}
+
+export async function fetchTripPresence(targetTripId = defaultTripId): Promise<ApiPresenceUser[]> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/presence`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ presence: ApiPresenceUser[] }>(response);
+  return data.presence;
 }
 
 export async function fetchRoutePlan(targetTripId = defaultTripId): Promise<ApiRoutePlan> {

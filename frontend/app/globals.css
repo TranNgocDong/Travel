@@ -441,6 +441,41 @@ button {
   opacity: 0.65;
 }
 
+.presence-toast {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.84rem;
+  font-weight: 850;
+  padding: 9px 10px;
+}
+
+.presence-toast.leave {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.presence-toast span {
+  min-width: 0;
+}
+
+.presence-toast button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: inherit;
+  font-weight: 900;
+}
+
 .empty-state {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1119,11 +1154,18 @@ button {
 }
 
 .expense-panel,
-.settlement-panel {
+.presence-panel,
+.settlement-panel,
+.member-manager-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   padding: 14px;
+}
+
+.group-stack {
+  display: grid;
+  gap: 12px;
 }
 
 .auth-shell {
@@ -1316,11 +1358,13 @@ button {
 
 .settlement-list,
 .balance-list,
+.presence-list,
 .expense-list {
   display: grid;
   gap: 8px;
 }
 
+.presence-row,
 .settlement-item,
 .balance-row,
 .expense-item {
@@ -1329,6 +1373,50 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.presence-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px;
+}
+
+.presence-row div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.presence-row strong,
+.presence-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence-row span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.presence-row i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.presence-row.self {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+.empty-panel-note,
+.presence-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .settlement-item {
@@ -1360,10 +1448,13 @@ button {
   border-top: 1px solid var(--line);
 }
 
-.member-manager {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+.role-pill {
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 5px 9px;
 }
 
 .compact-heading {
@@ -1488,7 +1579,7 @@ button {
   .app-shell[data-active-tab="route"] .workspace,
   .app-shell[data-active-tab="route"] .expense-list,
   .app-shell[data-active-tab="expenses"] .route-intel,
-  .app-shell[data-active-tab="expenses"] .settlement-panel,
+  .app-shell[data-active-tab="expenses"] .group-stack,
   .app-shell[data-active-tab="group"] .route-intel,
   .app-shell[data-active-tab="group"] .expense-panel,
   .app-shell[data-active-tab="group"] .expense-list {
@@ -1499,8 +1590,8 @@ button {
     display: grid;
   }
 
-  .app-shell[data-active-tab="group"] .settlement-panel {
-    display: block;
+  .app-shell[data-active-tab="group"] .group-stack {
+    display: grid;
   }
 }
 

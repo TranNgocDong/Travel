@@ -33,6 +33,7 @@ import {
   fetchMe,
   fetchRoutePlan,
   fetchTripLocations,
+  fetchTripPresence,
   fetchSettlementResult,
   fetchTripMembers,
   fetchTrips,
@@ -52,6 +53,7 @@ import {
   type ApiExpenseSplit,
   type ApiGeoPoint,
   type ApiMemberLocation,
+  type ApiPresenceUser,
   type ApiRoutePlan,
   type ApiRouteStopKind,
   type ApiRouteWaypoint,
@@ -77,6 +79,12 @@ type OfflineExpenseQueueItem = {
   createdAt: string;
 };
 
+type PresenceNotice = {
+  id: string;
+  message: string;
+  tone: "join" | "leave";
+};
+
 const categories = [
   { id: "fuel", label: "Xang", icon: Fuel },
   { id: "food", label: "An uong", icon: ReceiptText },
@@ -96,6 +104,8 @@ export function ExpensePlanner() {
   const [balances, setBalances] = useState<ApiBalance[]>([]);
   const [settlements, setSettlements] = useState<ApiSettlement[]>([]);
   const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
+  const [presenceUsers, setPresenceUsers] = useState<ApiPresenceUser[]>([]);
+  const [presenceNotice, setPresenceNotice] = useState<PresenceNotice | null>(null);
   const [routePlan, setRoutePlan] = useState<ApiRoutePlan | null>(null);
   const [routeOrigin, setRouteOrigin] = useState("");
   const [routeOriginCoordinate, setRouteOriginCoordinate] = useState<ApiGeoPoint | null>(null);
@@ -187,6 +197,7 @@ export function ExpensePlanner() {
         setBalances([]);
         setSettlements([]);
         setMemberLocations([]);
+        setPresenceUsers([]);
         setRoutePlan(null);
         setOfflineReady(false);
         setLastSyncedAt(new Date());
@@ -201,12 +212,13 @@ export function ExpensePlanner() {
         return;
       }
 
-      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations] = await Promise.all([
+      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence] = await Promise.all([
         fetchTripMembers(selectedTripId),
         fetchExpenses(selectedTripId),
         fetchSettlementResult(selectedTripId),
         fetchRoutePlan(selectedTripId),
         fetchTripLocations(selectedTripId).catch(() => []),
+        fetchTripPresence(selectedTripId).catch(() => []),
       ]);
       const mappedMembers = nextMembers.map(mapTripMember);
       const memberIds = mappedMembers.map((member) => member.id);
@@ -220,6 +232,7 @@ export function ExpensePlanner() {
       setBalances(result.balances);
       setSettlements(result.settlements);
       setMemberLocations(nextLocations);
+      setPresenceUsers(nextPresence);
       if (canUpdateRouteForm) {
         applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       } else {
@@ -254,6 +267,14 @@ export function ExpensePlanner() {
       setMemberLocations(await fetchTripLocations(targetTripId));
     } catch {
       // GPS sharing is helpful, but it should not block the rest of the trip screen.
+    }
+  }, [selectedTripId]);
+
+  const loadTripPresence = useCallback(async (targetTripId = selectedTripId) => {
+    try {
+      setPresenceUsers(await fetchTripPresence(targetTripId));
+    } catch {
+      // Presence is live convenience data; stale presence should not block trip work.
     }
   }, [selectedTripId]);
 
@@ -420,6 +441,7 @@ export function ExpensePlanner() {
     const unsubscribe = subscribeToTripEvents(activeTrip.id, {
       onOpen: () => {
         setIsLiveSyncConnected(true);
+        void loadTripPresence(activeTrip.id);
       },
       onError: () => {
         setIsLiveSyncConnected(false);
@@ -430,6 +452,21 @@ export function ExpensePlanner() {
         }
 
         setLastLiveSyncEvent(event);
+
+        if (event.type === "presence_joined" || event.type === "presence_left") {
+          void loadTripPresence(activeTrip.id);
+
+          if (event.actorUserId !== currentUser.id) {
+            const displayName = event.actorDisplayName || "Thanh vien";
+            setPresenceNotice({
+              id: event.id,
+              message: event.type === "presence_joined" ? `${displayName} vua vao phong` : `${displayName} vua roi phong`,
+              tone: event.type === "presence_joined" ? "join" : "leave",
+            });
+          }
+
+          return;
+        }
 
         if (refreshTimeout) {
           window.clearTimeout(refreshTimeout);
@@ -454,13 +491,27 @@ export function ExpensePlanner() {
       setIsLiveSyncConnected(false);
       unsubscribe();
     };
-  }, [activeTrip?.id, currentUser, loadTripData, loadTripLocations]);
+  }, [activeTrip?.id, currentUser, loadTripData, loadTripLocations, loadTripPresence]);
 
   useEffect(() => {
     return () => {
       clearLocationShareWatch();
     };
   }, []);
+
+  useEffect(() => {
+    if (!presenceNotice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPresenceNotice(null);
+    }, 4200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [presenceNotice]);
 
   function toggleTheme() {
     const nextTheme = theme === "dark" ? "light" : "dark";
@@ -755,6 +806,8 @@ export function ExpensePlanner() {
     setSettlements([]);
     setMembers([]);
     setMemberLocations([]);
+    setPresenceUsers([]);
+    setPresenceNotice(null);
     const cachedRoutePlan = readCachedRoutePlan(nextTripId);
 
     if (cachedRoutePlan) {
@@ -809,6 +862,8 @@ export function ExpensePlanner() {
     setSettlements([]);
     setMembers([]);
     setMemberLocations([]);
+    setPresenceUsers([]);
+    setPresenceNotice(null);
     setRoutePlan(null);
     setLastSyncedAt(null);
   }
@@ -1039,6 +1094,16 @@ export function ExpensePlanner() {
         </button>
       </div>
 
+      {presenceNotice && (
+        <div className={`presence-toast ${presenceNotice.tone}`} role="status">
+          <Users size={17} />
+          <span>{presenceNotice.message}</span>
+          <button type="button" aria-label="Dong thong bao" onClick={() => setPresenceNotice(null)}>
+            x
+          </button>
+        </div>
+      )}
+
       {queuedExpenseCount > 0 && (
         <div className="sync-alert" role="status">
           <CloudOff size={17} />
@@ -1204,100 +1269,27 @@ export function ExpensePlanner() {
           </div>
         </form>
 
-        <section className="settlement-panel" aria-label="Thanh toan de xuat">
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Nhom {members.length} nguoi</span>
-              <h2>Ai tra ai</h2>
-            </div>
-            <Users size={22} />
-          </div>
+        <div className="group-stack">
+          <PresencePanel currentUserId={currentUser.id} presenceUsers={presenceUsers} />
 
-          <div className="settlement-list">
-            {settlements.map((settlement) => (
-              <div className="settlement-item" key={`${settlement.fromUserId}-${settlement.toUserId}-${settlement.amountMinor}`}>
-                <Avatar member={findMember(members, settlement.fromUserId)} />
-                <div className="settlement-copy">
-                  <strong>
-                    {findMember(members, settlement.fromUserId).name} tra {findMember(members, settlement.toUserId).name}
-                  </strong>
-                  <span>{formatMoney(Number(settlement.amountMinor), settlement.currency)}</span>
-                </div>
-                <ArrowRightLeft size={18} />
-              </div>
-            ))}
-          </div>
+          <SettlementPanel balances={balances} members={members} settlements={settlements} />
 
-          <div className="balance-list">
-            {balances.map((balance) => {
-              const amount = Number(balance.balanceMinor);
-
-              return (
-                <div className="balance-row" key={balance.userId}>
-                  <span>{findMember(members, balance.userId).name}</span>
-                  <strong className={amount > 0 ? "positive" : "negative"}>{formatMoney(amount, balance.currency)}</strong>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="member-manager">
-            <div className="section-heading compact-heading">
-              <h2>Thanh vien</h2>
-              <span>{currentTripRole}</span>
-            </div>
-
-            <form className="member-add-form" onSubmit={handleAddMember}>
-              <input
-                value={newMemberEmail}
-                onChange={(event) => setNewMemberEmail(event.target.value)}
-                placeholder="Email dang nhap"
-                disabled={!canManageTripMembers}
-              />
-              <input
-                value={newMemberName}
-                onChange={(event) => setNewMemberName(event.target.value)}
-                placeholder="Ten hien thi"
-                disabled={!canManageTripMembers}
-              />
-              <select value={newMemberRole} onChange={(event) => setNewMemberRole(event.target.value as ApiTripRole)} disabled={!canManageTripMembers}>
-                <option value="viewer">viewer</option>
-                <option value="editor">editor</option>
-                <option value="owner">owner</option>
-              </select>
-              <button type="submit" disabled={!canManageTripMembers} title="Them thanh vien" aria-label="Them thanh vien">
-                <Plus size={18} />
-              </button>
-            </form>
-
-            <div className="trip-member-list">
-              {members.map((member) => (
-                <div className="trip-member-row" key={member.id}>
-                  <Avatar member={member} />
-                  <span>{member.name}</span>
-                  <select
-                    value={member.role}
-                    onChange={(event) => handleRoleChange(member.id, event.target.value as ApiTripRole)}
-                    disabled={!canManageTripMembers || member.id === currentUser.id}
-                  >
-                    <option value="viewer">viewer</option>
-                    <option value="editor">editor</option>
-                    <option value="owner">owner</option>
-                  </select>
-                  <button
-                    type="button"
-                    title="Xoa thanh vien"
-                    aria-label="Xoa thanh vien"
-                    disabled={!canManageTripMembers || member.id === currentUser.id}
-                    onClick={() => handleRemoveMember(member.id)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          </section>
+          <MemberManagerPanel
+            canManageTripMembers={canManageTripMembers}
+            currentTripRole={currentTripRole}
+            currentUserId={currentUser.id}
+            members={members}
+            newMemberEmail={newMemberEmail}
+            newMemberName={newMemberName}
+            newMemberRole={newMemberRole}
+            onAddMember={handleAddMember}
+            onMemberEmailChange={setNewMemberEmail}
+            onMemberNameChange={setNewMemberName}
+            onMemberRoleChange={setNewMemberRole}
+            onRemoveMember={handleRemoveMember}
+            onRoleChange={handleRoleChange}
+          />
+        </div>
           </section>
 
           <section className="expense-list" aria-label="Chi phi gan day">
@@ -1321,6 +1313,186 @@ export function ExpensePlanner() {
         </>
       )}
     </main>
+  );
+}
+
+function PresencePanel({ currentUserId, presenceUsers }: { currentUserId: string; presenceUsers: ApiPresenceUser[] }) {
+  return (
+    <section className="presence-panel" aria-label="Hien dien trong phong">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Hien dien</span>
+          <h2>{presenceUsers.length} dang trong phong</h2>
+        </div>
+        <Users size={22} />
+      </div>
+
+      <div className="presence-list">
+        {presenceUsers.length ? (
+          presenceUsers.map((user) => (
+            <div className={user.userId === currentUserId ? "presence-row self" : "presence-row"} key={user.userId}>
+              <Avatar member={{ id: user.userId, name: user.displayName, initials: createInitials(user.displayName) }} />
+              <div>
+                <strong>{user.userId === currentUserId ? "Ban" : user.displayName}</strong>
+                <span>
+                  Online tu {formatLocationTime(user.onlineSince)}
+                  {user.connectionCount > 1 ? ` - ${user.connectionCount} thiet bi` : ""}
+                </span>
+              </div>
+              <i aria-label="Dang online" />
+            </div>
+          ))
+        ) : (
+          <p>Chua thay ai trong phong. Khi co nguoi mo chuyen di, danh sach se tu hien.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SettlementPanel({
+  balances,
+  members,
+  settlements,
+}: {
+  balances: ApiBalance[];
+  members: TripMemberView[];
+  settlements: ApiSettlement[];
+}) {
+  return (
+    <section className="settlement-panel" aria-label="Thanh toan de xuat">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Cong no nhom</span>
+          <h2>Ai tra ai</h2>
+        </div>
+        <ArrowRightLeft size={22} />
+      </div>
+
+      <div className="settlement-list">
+        {settlements.length ? (
+          settlements.map((settlement) => (
+            <div className="settlement-item" key={`${settlement.fromUserId}-${settlement.toUserId}-${settlement.amountMinor}`}>
+              <Avatar member={findMember(members, settlement.fromUserId)} />
+              <div className="settlement-copy">
+                <strong>
+                  {findMember(members, settlement.fromUserId).name} tra {findMember(members, settlement.toUserId).name}
+                </strong>
+                <span>{formatMoney(Number(settlement.amountMinor), settlement.currency)}</span>
+              </div>
+              <ArrowRightLeft size={18} />
+            </div>
+          ))
+        ) : (
+          <p className="empty-panel-note">Chua co khoan can thanh toan.</p>
+        )}
+      </div>
+
+      <div className="balance-list">
+        {balances.map((balance) => {
+          const amount = Number(balance.balanceMinor);
+
+          return (
+            <div className="balance-row" key={balance.userId}>
+              <span>{findMember(members, balance.userId).name}</span>
+              <strong className={amount > 0 ? "positive" : "negative"}>{formatMoney(amount, balance.currency)}</strong>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function MemberManagerPanel({
+  canManageTripMembers,
+  currentTripRole,
+  currentUserId,
+  members,
+  newMemberEmail,
+  newMemberName,
+  newMemberRole,
+  onAddMember,
+  onMemberEmailChange,
+  onMemberNameChange,
+  onMemberRoleChange,
+  onRemoveMember,
+  onRoleChange,
+}: {
+  canManageTripMembers: boolean;
+  currentTripRole: ApiTripRole;
+  currentUserId: string;
+  members: TripMemberView[];
+  newMemberEmail: string;
+  newMemberName: string;
+  newMemberRole: ApiTripRole;
+  onAddMember: (event: FormEvent<HTMLFormElement>) => void;
+  onMemberEmailChange: (value: string) => void;
+  onMemberNameChange: (value: string) => void;
+  onMemberRoleChange: (value: ApiTripRole) => void;
+  onRemoveMember: (memberId: string) => void;
+  onRoleChange: (memberId: string, role: ApiTripRole) => void;
+}) {
+  return (
+    <section className="member-manager-panel" aria-label="Quan ly thanh vien">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Quan ly nhom</span>
+          <h2>Thanh vien</h2>
+        </div>
+        <span className="role-pill">{currentTripRole}</span>
+      </div>
+
+      <form className="member-add-form" onSubmit={onAddMember}>
+        <input
+          value={newMemberEmail}
+          onChange={(event) => onMemberEmailChange(event.target.value)}
+          placeholder="Email dang nhap"
+          disabled={!canManageTripMembers}
+        />
+        <input
+          value={newMemberName}
+          onChange={(event) => onMemberNameChange(event.target.value)}
+          placeholder="Ten hien thi"
+          disabled={!canManageTripMembers}
+        />
+        <select value={newMemberRole} onChange={(event) => onMemberRoleChange(event.target.value as ApiTripRole)} disabled={!canManageTripMembers}>
+          <option value="viewer">viewer</option>
+          <option value="editor">editor</option>
+          <option value="owner">owner</option>
+        </select>
+        <button type="submit" disabled={!canManageTripMembers} title="Them thanh vien" aria-label="Them thanh vien">
+          <Plus size={18} />
+        </button>
+      </form>
+
+      <div className="trip-member-list">
+        {members.map((member) => (
+          <div className="trip-member-row" key={member.id}>
+            <Avatar member={member} />
+            <span>{member.name}</span>
+            <select
+              value={member.role}
+              onChange={(event) => onRoleChange(member.id, event.target.value as ApiTripRole)}
+              disabled={!canManageTripMembers || member.id === currentUserId}
+            >
+              <option value="viewer">viewer</option>
+              <option value="editor">editor</option>
+              <option value="owner">owner</option>
+            </select>
+            <button
+              type="button"
+              title="Xoa thanh vien"
+              aria-label="Xoa thanh vien"
+              disabled={!canManageTripMembers || member.id === currentUserId}
+              onClick={() => onRemoveMember(member.id)}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
