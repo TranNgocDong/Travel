@@ -54,13 +54,19 @@ CORS_ORIGINS=https://demovn.com,https://www.demovn.com,https://truyen123123.netl
 
 ## Kiem tra
 
-Sau khi deploy xong, mo:
+Sau khi deploy xong, mo health check nhanh:
 
 ```txt
 https://your-render-service.onrender.com/health
 ```
 
-Dung khi thay:
+Dung khi thay `ok: true`. De kiem tra database that su ket noi, mo:
+
+```txt
+https://your-render-service.onrender.com/ready
+```
+
+Database dung khi thay:
 
 ```json
 {

@@ -62,7 +62,16 @@ app.addHook("onClose", async () => {
   await pool?.end();
 });
 
-app.get("/health", async (_request, reply) => {
+app.get("/health", async () => {
+  return {
+    ok: true,
+    service: "travel-tech-backend",
+    storage: storageMode,
+    database: pool ? "configured" : "not_configured",
+  };
+});
+
+app.get("/ready", async (_request, reply) => {
   if (pool) {
     try {
       await pingDatabase(pool);

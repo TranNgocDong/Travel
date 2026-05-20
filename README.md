@@ -47,6 +47,18 @@ Open:
 http://localhost:3000
 ```
 
+Backend liveness:
+
+```txt
+GET /health
+```
+
+Backend database readiness:
+
+```txt
+GET /ready
+```
+
 ## Deploy
 
 - Netlify frontend: see `NETLIFY_DEPLOY.md`
