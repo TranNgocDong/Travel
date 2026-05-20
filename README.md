@@ -50,6 +50,7 @@ http://localhost:3000
 ## Deploy
 
 - Netlify frontend: see `NETLIFY_DEPLOY.md`
+- Render backend + Neon PostgreSQL: see `RENDER_BACKEND_DEPLOY.md`
 - Railway backend + PostgreSQL: see `RAILWAY_BACKEND_DEPLOY.md`
 - VPS/Docker full stack: see `DEPLOY.md` or `DEPLOY_VI.md`
 
