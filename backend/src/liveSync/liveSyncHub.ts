@@ -2,6 +2,7 @@ export type LiveSyncEventType =
   | "expense_created"
   | "member_changed"
   | "route_plan_updated"
+  | "message_created"
   | "location_updated"
   | "location_stopped"
   | "presence_joined"

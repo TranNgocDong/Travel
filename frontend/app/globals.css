@@ -63,7 +63,7 @@ button {
 }
 
 .app-shell {
-  width: min(100%, 1120px);
+  width: min(100%, 1280px);
   min-height: 100vh;
   margin: 0 auto;
   padding: 18px 14px 32px;
@@ -462,6 +462,12 @@ button {
   color: var(--muted);
 }
 
+.presence-toast.message {
+  border-color: color-mix(in srgb, var(--amber) 35%, var(--line));
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
 .presence-toast span {
   min-width: 0;
 }
@@ -667,6 +673,7 @@ button {
 .route-map-panel {
   display: grid;
   gap: 10px;
+  padding: 10px;
 }
 
 .route-side-stack {
@@ -676,6 +683,7 @@ button {
 
 .osm-map-shell {
   position: relative;
+  height: clamp(360px, 52vh, 560px);
   min-height: 260px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1163,6 +1171,204 @@ button {
   padding: 14px;
 }
 
+.chat-dock {
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 1100;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.chat-dock > * {
+  pointer-events: auto;
+}
+
+.chat-bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.28);
+  color: #ffffff;
+}
+
+.chat-bubble span {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border: 2px solid var(--panel);
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 950;
+  padding: 0 6px;
+}
+
+.chat-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(360px, calc(100vw - 28px));
+  height: min(520px, calc(100vh - 104px));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.26);
+}
+
+.chat-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px;
+}
+
+.chat-panel-head h2 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+}
+
+.chat-panel-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.chat-messages {
+  display: grid;
+  align-content: end;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--panel-soft);
+  padding: 14px;
+}
+
+.chat-message {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  max-width: 86%;
+}
+
+.chat-message.self {
+  justify-self: end;
+  justify-items: end;
+}
+
+.chat-message div {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.chat-message p {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  padding: 9px 11px;
+}
+
+.chat-message.self p {
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.chat-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.chat-empty p,
+.chat-error {
+  margin: 0;
+}
+
+.chat-error {
+  border-top: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 9px 14px;
+}
+
+.chat-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+}
+
+.chat-compose input,
+.chat-compose button {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.chat-compose input {
+  min-width: 0;
+  background: var(--panel-soft);
+  color: var(--text);
+  outline: none;
+  padding: 0 12px;
+}
+
+.chat-compose input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.chat-compose button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.chat-compose button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .group-stack {
   display: grid;
   gap: 12px;
@@ -1619,7 +1825,13 @@ button {
   }
 
   .route-intel-grid {
-    grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 0.75fr);
+    align-items: start;
+  }
+
+  .osm-map-shell {
+    height: clamp(460px, 58vh, 640px);
+    min-height: 460px;
   }
 
   .route-builder {
@@ -1632,7 +1844,7 @@ button {
   }
 
   .waypoint-list {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .offline-pill {
@@ -1640,7 +1852,7 @@ button {
   }
 
   .workspace {
-    grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.75fr);
     align-items: start;
   }
 

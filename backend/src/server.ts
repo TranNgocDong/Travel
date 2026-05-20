@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { verifyFirebaseBearerToken } from "./auth/firebaseAuth.js";
 import { toSafeUser, type UserAccount } from "./auth/types.js";
 import { displayNameFromEmail, isValidEmail, normalizeEmail, userIdFromEmail } from "./auth/userIdentity.js";
+import { InMemoryTripMessageRepository, PostgresTripMessageRepository, type TripMessageRepository } from "./chat/tripMessageRepository.js";
 import { createPool, getDatabaseUrl, pingDatabase } from "./db/config.js";
 import { defaultFxRates, supportedCurrencies } from "./expense/referenceData.js";
 import { DuplicateExpenseIdError, InMemoryExpenseRepository, type ExpenseRepository, type StoredExpense } from "./expense/expenseRepository.js";
@@ -39,6 +40,7 @@ if (isProduction && !databaseUrl) {
 const pool = databaseUrl ? createPool() : null;
 const repository: ExpenseRepository = pool ? new PostgresExpenseRepository(pool) : new InMemoryExpenseRepository();
 const memberRepository: TripMemberRepository = pool ? new PostgresTripMemberRepository(pool) : new InMemoryTripMemberRepository();
+const messageRepository: TripMessageRepository = pool ? new PostgresTripMessageRepository(pool) : new InMemoryTripMessageRepository();
 const locationRepository: TripMemberLocationRepository = pool
   ? new PostgresTripMemberLocationRepository(pool)
   : new InMemoryTripMemberLocationRepository();
@@ -274,6 +276,60 @@ app.get("/api/v1/trips/:tripId/presence", async (request, reply) => {
   return {
     presence: liveSyncHub.listPresence(tripId),
   };
+});
+
+app.get("/api/v1/trips/:tripId/messages", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  return {
+    messages: await messageRepository.listByTrip(tripId, parseMessageLimit(request.query)),
+  };
+});
+
+app.post("/api/v1/trips/:tripId/messages", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const parsed = parseMessageBody(request.body);
+
+  if (!parsed.ok) {
+    return reply.status(400).send({
+      error: "VALIDATION_ERROR",
+      message: parsed.message,
+    });
+  }
+
+  const message = await messageRepository.create({
+    id: `msg_${randomUUID()}`,
+    tripId,
+    userId: user.id,
+    displayName: user.displayName,
+    body: parsed.body,
+  });
+  publishTripChange(tripId, user.id, "message_created", user.displayName);
+
+  return reply.status(201).send({
+    message,
+  });
 });
 
 app.post("/api/v1/trips/:tripId/route-plan", async (request, reply) => {
@@ -781,6 +837,38 @@ function createTripId(title: string): string {
   return `${slug || "trip"}-${randomUUID().slice(0, 8)}`;
 }
 
+function parseMessageLimit(query: unknown): number {
+  const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
+  const parsed = parseFiniteNumber(input.limit);
+  return parsed === null ? 50 : Math.max(1, Math.min(100, Math.trunc(parsed)));
+}
+
+function parseMessageBody(body: unknown):
+  | {
+      ok: true;
+      body: string;
+    }
+  | {
+      ok: false;
+      message: string;
+    } {
+  if (!body || typeof body !== "object") {
+    return { ok: false, message: "Nội dung gửi lên không hợp lệ" };
+  }
+
+  const input = body as Record<string, unknown>;
+  const message = parseString(input.body);
+
+  if (!message || message.length > 1000) {
+    return { ok: false, message: "Tin nhắn phải có từ 1 đến 1000 ký tự" };
+  }
+
+  return {
+    ok: true,
+    body: message,
+  };
+}
+
 function parseCreateExpenseBody(body: unknown):
   | {
       ok: true;
@@ -874,17 +962,17 @@ function parseRoutePlanBody(body: unknown):
   const originCoordinate = parseGeoPoint(input.originCoordinate);
 
   if (!originCoordinate && (!origin || origin.length < 2 || origin.length > 160)) {
-    return { ok: false, message: "Origin must be between 2 and 160 characters" };
+    return { ok: false, message: "Điểm đi phải có từ 2 đến 160 ký tự" };
   }
 
   if (!destination || destination.length < 2 || destination.length > 160) {
-    return { ok: false, message: "Destination must be between 2 and 160 characters" };
+    return { ok: false, message: "Điểm đến phải có từ 2 đến 160 ký tự" };
   }
 
   return {
     ok: true,
     input: {
-      origin: origin ?? "Vi tri cua ban",
+      origin: origin ?? "Vị trí của bạn",
       destination,
       ...(originCoordinate ? { originCoordinate } : {}),
     },

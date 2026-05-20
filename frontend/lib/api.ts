@@ -173,10 +173,27 @@ export type ApiPresenceUser = {
   connectionCount: number;
 };
 
+export type ApiTripMessage = {
+  id: string;
+  tripId: string;
+  userId: string;
+  displayName: string;
+  body: string;
+  createdAt: string;
+};
+
 export type ApiTripLiveEvent = {
   id: string;
   tripId: string;
-  type: "expense_created" | "member_changed" | "route_plan_updated" | "location_updated" | "location_stopped" | "presence_joined" | "presence_left";
+  type:
+    | "expense_created"
+    | "member_changed"
+    | "route_plan_updated"
+    | "message_created"
+    | "location_updated"
+    | "location_stopped"
+    | "presence_joined"
+    | "presence_left";
   actorUserId: string;
   actorDisplayName?: string;
   createdAt: string;
@@ -278,6 +295,26 @@ export async function fetchTripPresence(targetTripId = defaultTripId): Promise<A
   });
   const data = await parseApiResponse<{ presence: ApiPresenceUser[] }>(response);
   return data.presence;
+}
+
+export async function fetchTripMessages(targetTripId = defaultTripId): Promise<ApiTripMessage[]> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/messages`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ messages: ApiTripMessage[] }>(response);
+  return data.messages;
+}
+
+export async function sendTripMessage(body: string, targetTripId = defaultTripId): Promise<ApiTripMessage> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ body }),
+  });
+  const data = await parseApiResponse<{ message: ApiTripMessage }>(response);
+  return data.message;
 }
 
 export async function fetchRoutePlan(targetTripId = defaultTripId): Promise<ApiRoutePlan> {

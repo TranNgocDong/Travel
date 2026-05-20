@@ -80,7 +80,7 @@ export function buildStarterRoutePlan(tripId: string, now = new Date()): RoutePl
   return {
     tripId,
     provider: "starter",
-    title: "Chua co tuyen",
+    title: "Chưa có tuyến",
     origin: "",
     destination: "",
     totalDistanceKm: 0,
@@ -104,11 +104,11 @@ export async function buildOpenStreetRoutePlan(tripId: string, input: RouteBuild
   const hasOriginCoordinate = isValidGeoPoint(originCoordinate);
 
   if ((!hasOriginCoordinate && originQuery.length < 2) || destinationQuery.length < 2 || originQuery.length > 160 || destinationQuery.length > 160) {
-    throw new RoutePlannerError("INVALID_ROUTE_INPUT", "Diem di va diem den phai co tu 2 den 160 ky tu");
+    throw new RoutePlannerError("INVALID_ROUTE_INPUT", "Điểm đi và điểm đến phải có từ 2 đến 160 ký tự");
   }
 
   const [origin, destination] = await Promise.all([
-    hasOriginCoordinate ? Promise.resolve(createCoordinatePlace(originCoordinate, originQuery || "Vi tri cua ban")) : geocodePlace(originQuery),
+    hasOriginCoordinate ? Promise.resolve(createCoordinatePlace(originCoordinate, originQuery || "Vị trí của bạn")) : geocodePlace(originQuery),
     geocodePlace(destinationQuery),
   ]);
   const route = await fetchOsrmRoute(origin.coordinate, destination.coordinate);
@@ -184,9 +184,9 @@ export function createDynamicWaypoints(
       name: origin.name,
       province: origin.region,
       distanceFromStartKm: 0,
-      eta: "Bat dau",
+      eta: "Bắt đầu",
       coordinate: origin.coordinate,
-      roadNote: "Kiem tra xang, lop, giay to va pin dien thoai truoc khi xuat phat.",
+      roadNote: "Kiểm tra xăng, lốp, giấy tờ và pin điện thoại trước khi xuất phát.",
       weather: createWeatherStub(0),
       stop: null,
       borderChecklist: [],
@@ -195,16 +195,16 @@ export function createDynamicWaypoints(
       ? [
           createRouteWaypoint({
             id: "midpoint-rest",
-            name: "Diem nghi giua chang",
-            province: "Theo tuyen",
+            name: "Điểm nghỉ giữa chặng",
+            province: "Theo tuyến",
             distanceFromStartKm: Math.round(distanceKm / 2),
             eta: formatDuration(Math.round(durationMinutes / 2)),
             coordinate: midpoint,
-            roadNote: "Nen nghi 15-20 phut, bo sung nuoc va kiem tra xe.",
+            roadNote: "Nên nghỉ 15-20 phút, bổ sung nước và kiểm tra xe.",
             weather: createWeatherStub(1),
             stop: {
               kind: "rest",
-              label: "Nghi + kiem tra xe",
+              label: "Nghỉ + kiểm tra xe",
               priority: "recommended",
             },
             borderChecklist: [],
@@ -219,13 +219,13 @@ export function createDynamicWaypoints(
       eta: formatDuration(durationMinutes),
       coordinate: destination.coordinate,
       roadNote: destinationBorderChecklist.length
-        ? "Diem den co dau hieu lien quan cua khau, hay kiem tra giay to truoc khi toi."
-        : "Gan toi diem den, kiem tra lai lich nghi va diem do xe.",
+        ? "Điểm đến có dấu hiệu liên quan cửa khẩu, hãy kiểm tra giấy tờ trước khi tới."
+        : "Gần tới điểm đến, kiểm tra lại lịch nghỉ và điểm đỗ xe.",
       weather: createWeatherStub(destinationBorderChecklist.length ? 2 : 1),
       stop: destinationBorderChecklist.length
         ? {
             kind: "border",
-            label: "Kiem tra cua khau",
+            label: "Kiểm tra cửa khẩu",
             priority: "required",
           }
         : null,
@@ -305,7 +305,7 @@ async function geocodePlace(query: string): Promise<GeocodedPlace> {
   const lng = Number(first?.lon);
 
   if (!first || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-    throw new RoutePlannerError("GEOCODE_NOT_FOUND", `Khong tim thay dia diem: ${query}`);
+    throw new RoutePlannerError("GEOCODE_NOT_FOUND", `Không tìm thấy địa điểm: ${query}`);
   }
 
   return {
@@ -337,7 +337,7 @@ async function fetchOsrmRoute(origin: GeoPoint, destination: GeoPoint): Promise<
   const coordinatesList = route?.geometry?.coordinates;
 
   if (data.code !== "Ok" || !route || !Array.isArray(coordinatesList) || coordinatesList.length < 2) {
-    throw new RoutePlannerError("ROUTE_NOT_FOUND", "Khong tim thay duong phu hop giua hai diem");
+    throw new RoutePlannerError("ROUTE_NOT_FOUND", "Không tìm thấy đường phù hợp giữa hai điểm");
   }
 
   return {
@@ -388,7 +388,7 @@ async function fetchOpenMeteoWeather(coordinate: GeoPoint, targetTime: Date): Pr
   const rainChance = Math.max(0, Math.min(100, Math.round(Number(forecast.precipitation_probability ?? 0))));
 
   if (!Number.isFinite(tempC) || !Number.isFinite(windKph) || !Number.isFinite(rainChance)) {
-    throw new RoutePlannerError("ROUTE_PROVIDER_ERROR", "Du lieu thoi tiet khong hop le");
+    throw new RoutePlannerError("ROUTE_PROVIDER_ERROR", "Dữ liệu thời tiết không hợp lệ");
   }
 
   const condition = weatherCodeToCondition(weatherCode);
@@ -422,7 +422,7 @@ async function fetchJson<T>(url: URL, fallbackCode: RoutePlannerError["code"]): 
     });
 
     if (!response.ok) {
-      throw new RoutePlannerError(fallbackCode, "Dich vu ban do tam thoi khong phan hoi");
+      throw new RoutePlannerError(fallbackCode, "Dịch vụ bản đồ tạm thời không phản hồi");
     }
 
     return (await response.json()) as T;
@@ -431,7 +431,7 @@ async function fetchJson<T>(url: URL, fallbackCode: RoutePlannerError["code"]): 
       throw error;
     }
 
-    throw new RoutePlannerError("ROUTE_PROVIDER_ERROR", "Khong ket noi duoc dich vu ban do");
+    throw new RoutePlannerError("ROUTE_PROVIDER_ERROR", "Không kết nối được dịch vụ bản đồ");
   } finally {
     clearTimeout(timeout);
   }
@@ -519,34 +519,34 @@ function pickNearestHourlyWeather(hourly: OpenMeteoForecastResponse["hourly"], t
 
 function weatherCodeToCondition(code: number): string {
   if (code === 0) {
-    return "Troi quang";
+    return "Trời quang";
   }
 
   if (code >= 1 && code <= 3) {
-    return "Nhieu may";
+    return "Nhiều mây";
   }
 
   if (code === 45 || code === 48) {
-    return "Suong mu";
+    return "Sương mù";
   }
 
   if (code >= 51 && code <= 57) {
-    return "Mua phun";
+    return "Mưa phùn";
   }
 
   if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) {
-    return "Mua";
+    return "Mưa";
   }
 
   if (code >= 71 && code <= 77) {
-    return "Mua lanh";
+    return "Mưa lạnh";
   }
 
   if (code >= 95) {
-    return "Dong set";
+    return "Dông sét";
   }
 
-  return "Thoi tiet on dinh";
+  return "Thời tiết ổn định";
 }
 
 function calculateWeatherRisk(code: number, rainChance: number, windKph: number, precipitationMm: number): RouteRiskLevel {
@@ -563,18 +563,18 @@ function calculateWeatherRisk(code: number, rainChance: number, windKph: number,
 
 function createWeatherAdvisory(riskLevel: RouteRiskLevel, condition: string, rainChance: number, windKph: number, precipitationMm: number): string {
   if (riskLevel === "high") {
-    return `Can nhac dung nghi: ${condition.toLowerCase()}, mua ${rainChance}%, gio ${windKph} km/h. Boc do va giam toc do.`;
+    return `Cân nhắc dừng nghỉ: ${condition.toLowerCase()}, mưa ${rainChance}%, gió ${windKph} km/h. Bọc đồ và giảm tốc độ.`;
   }
 
   if (riskLevel === "medium") {
-    return `Nen chuan bi ao mua: ${condition.toLowerCase()}, mua ${rainChance}%, gio ${windKph} km/h.`;
+    return `Nên chuẩn bị áo mưa: ${condition.toLowerCase()}, mưa ${rainChance}%, gió ${windKph} km/h.`;
   }
 
   if (precipitationMm > 0) {
-    return `Co mua nhe ${precipitationMm} mm, van co the di nhung nen boc giay to.`;
+    return `Có mưa nhẹ ${precipitationMm} mm, vẫn có thể đi nhưng nên bọc giấy tờ.`;
   }
 
-  return "Dieu kien on, co the tiep tuc chang nay.";
+  return "Điều kiện ổn, có thể tiếp tục chặng này.";
 }
 
 function roundToOneDecimal(value: number): number {
@@ -588,30 +588,30 @@ function roundToOneDecimal(value: number): number {
 function createWeatherStub(index: number): RouteWeather {
   const presets: RouteWeather[] = [
     {
-      condition: "Chua dong bo",
+      condition: "Chưa đồng bộ",
       tempC: 27,
       rainChance: 20,
       windKph: 10,
       riskLevel: "low",
-      advisory: "Chua lay duoc thoi tiet that, dung du lieu du phong.",
+      advisory: "Chưa lấy được thời tiết thật, dùng dữ liệu dự phòng.",
       source: "fallback",
     },
     {
-      condition: "Chua dong bo",
+      condition: "Chưa đồng bộ",
       tempC: 26,
       rainChance: 42,
       windKph: 15,
       riskLevel: "medium",
-      advisory: "Nen kiem tra lai thoi tiet truoc khi chay chang dai.",
+      advisory: "Nên kiểm tra lại thời tiết trước khi chạy chặng dài.",
       source: "fallback",
     },
     {
-      condition: "Chua dong bo",
+      condition: "Chưa đồng bộ",
       tempC: 24,
       rainChance: 55,
       windKph: 18,
       riskLevel: "medium",
-      advisory: "Gan cua khau, hay chong nuoc giay to va du phong thoi gian.",
+      advisory: "Gần cửa khẩu, hãy chống nước giấy tờ và dự phòng thời gian.",
       source: "fallback",
     },
   ];
@@ -627,7 +627,7 @@ function createBorderChecklist(placeName: string): string[] {
     return [];
   }
 
-  return ["Passport", "Visa/permit neu can", "Dang ky xe", "Bao hiem xe", "Tien mat dia phuong du phong"];
+  return ["Passport", "Visa/permit nếu cần", "Đăng ký xe", "Bảo hiểm xe", "Tiền mặt địa phương dự phòng"];
 }
 
 function simplifyPlaceName(displayName: string): string {
@@ -645,10 +645,10 @@ function estimateOfflinePackSize(distanceKm: number): number {
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) {
-    return `${minutes} phut`;
+    return `${minutes} phút`;
   }
 
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest ? `${hours} gio ${rest} phut` : `${hours} gio`;
+  return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
 }

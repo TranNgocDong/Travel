@@ -12,17 +12,20 @@ import {
   Fuel,
   Map,
   MapPin,
+  MessageCircle,
   Moon,
   Navigation,
   Plus,
   ReceiptText,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sun,
   Users,
   WalletCards,
+  X,
 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   addTripMember,
@@ -32,6 +35,7 @@ import {
   fetchExpenses,
   fetchMe,
   fetchRoutePlan,
+  fetchTripMessages,
   fetchTripLocations,
   fetchTripPresence,
   fetchSettlementResult,
@@ -44,6 +48,7 @@ import {
   planRoute,
   removeTripMember,
   shareMyLocation,
+  sendTripMessage,
   subscribeToTripEvents,
   stopSharingMyLocation,
   updateTripMember,
@@ -61,6 +66,7 @@ import {
   type ApiTrip,
   type ApiTripLiveEvent,
   type ApiTripMember,
+  type ApiTripMessage,
   type ApiTripRole,
   type ApiUser,
 } from "@/lib/api";
@@ -82,14 +88,14 @@ type OfflineExpenseQueueItem = {
 type PresenceNotice = {
   id: string;
   message: string;
-  tone: "join" | "leave";
+  tone: "join" | "leave" | "message";
 };
 
 const categories = [
-  { id: "fuel", label: "Xang", icon: Fuel },
-  { id: "food", label: "An uong", icon: ReceiptText },
-  { id: "hotel", label: "Ngu nghi", icon: Bike },
-  { id: "border", label: "Cua khau", icon: ShieldCheck },
+  { id: "fuel", label: "Xăng", icon: Fuel },
+  { id: "food", label: "Ăn uống", icon: ReceiptText },
+  { id: "hotel", label: "Nghỉ ngơi", icon: Bike },
+  { id: "border", label: "Cửa khẩu", icon: ShieldCheck },
 ];
 
 const locationShareIntervalMs = 15_000;
@@ -106,6 +112,12 @@ export function ExpensePlanner() {
   const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
   const [presenceUsers, setPresenceUsers] = useState<ApiPresenceUser[]>([]);
   const [presenceNotice, setPresenceNotice] = useState<PresenceNotice | null>(null);
+  const [chatMessages, setChatMessages] = useState<ApiTripMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [routePlan, setRoutePlan] = useState<ApiRoutePlan | null>(null);
   const [routeOrigin, setRouteOrigin] = useState("");
   const [routeOriginCoordinate, setRouteOriginCoordinate] = useState<ApiGeoPoint | null>(null);
@@ -146,6 +158,7 @@ export function ExpensePlanner() {
   const routeFormDirtyRef = useRef(false);
   const locationShareWatchIdRef = useRef<number | null>(null);
   const lastSharedPositionAtRef = useRef(0);
+  const chatMessageListRef = useRef<HTMLDivElement | null>(null);
 
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
     routeFormDirtyRef.current = false;
@@ -198,6 +211,7 @@ export function ExpensePlanner() {
         setSettlements([]);
         setMemberLocations([]);
         setPresenceUsers([]);
+        setChatMessages([]);
         setRoutePlan(null);
         setOfflineReady(false);
         setLastSyncedAt(new Date());
@@ -212,13 +226,14 @@ export function ExpensePlanner() {
         return;
       }
 
-      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence] = await Promise.all([
+      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence, nextMessages] = await Promise.all([
         fetchTripMembers(selectedTripId),
         fetchExpenses(selectedTripId),
         fetchSettlementResult(selectedTripId),
         fetchRoutePlan(selectedTripId),
         fetchTripLocations(selectedTripId).catch(() => []),
         fetchTripPresence(selectedTripId).catch(() => []),
+        fetchTripMessages(selectedTripId).catch(() => []),
       ]);
       const mappedMembers = nextMembers.map(mapTripMember);
       const memberIds = mappedMembers.map((member) => member.id);
@@ -233,6 +248,7 @@ export function ExpensePlanner() {
       setSettlements(result.settlements);
       setMemberLocations(nextLocations);
       setPresenceUsers(nextPresence);
+      setChatMessages(nextMessages);
       if (canUpdateRouteForm) {
         applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       } else {
@@ -245,11 +261,11 @@ export function ExpensePlanner() {
       if (cached && canUpdateRouteForm) {
         applyRoutePlan(cached, { cache: false, fromCache: true });
         if (!options.silent) {
-          setApiError("Dang dung tuyen da luu trong may vi API tam thoi khong ket noi duoc");
+          setApiError("Đang dùng tuyến đã lưu trong máy vì API tạm thời không kết nối được");
         }
       } else {
         if (!options.silent) {
-          setApiError(error instanceof Error ? error.message : "Khong ket noi duoc API");
+          setApiError(error instanceof Error ? error.message : "Không kết nối được API");
         }
       }
     } finally {
@@ -275,6 +291,14 @@ export function ExpensePlanner() {
       setPresenceUsers(await fetchTripPresence(targetTripId));
     } catch {
       // Presence is live convenience data; stale presence should not block trip work.
+    }
+  }, [selectedTripId]);
+
+  const loadTripMessages = useCallback(async (targetTripId = selectedTripId) => {
+    try {
+      setChatMessages(await fetchTripMessages(targetTripId));
+    } catch {
+      // Chat history should refresh when possible, but the trip must remain usable offline.
     }
   }, [selectedTripId]);
 
@@ -420,16 +444,16 @@ export function ExpensePlanner() {
     : isLiveSyncConnected
       ? "Live"
     : isRefreshingData
-      ? "Dang cap nhat"
+      ? "Đang cập nhật"
       : lastSyncedAt
         ? formatSyncTime(lastSyncedAt)
         : isLoading
-          ? "Dang tai"
+          ? "Đang tải"
           : isUsingOfflineRoute
             ? "Offline"
             : offlineReady
-              ? "Da luu"
-              : "Chua luu";
+              ? "Đã lưu"
+              : "Chưa lưu";
 
   useEffect(() => {
     if (!currentUser || !activeTrip?.id) {
@@ -442,6 +466,7 @@ export function ExpensePlanner() {
       onOpen: () => {
         setIsLiveSyncConnected(true);
         void loadTripPresence(activeTrip.id);
+        void loadTripMessages(activeTrip.id);
       },
       onError: () => {
         setIsLiveSyncConnected(false);
@@ -457,11 +482,30 @@ export function ExpensePlanner() {
           void loadTripPresence(activeTrip.id);
 
           if (event.actorUserId !== currentUser.id) {
-            const displayName = event.actorDisplayName || "Thanh vien";
+            const displayName = event.actorDisplayName || "Thành viên";
             setPresenceNotice({
               id: event.id,
-              message: event.type === "presence_joined" ? `${displayName} vua vao phong` : `${displayName} vua roi phong`,
+              message: event.type === "presence_joined" ? `${displayName} vừa vào phòng` : `${displayName} vừa rời phòng`,
               tone: event.type === "presence_joined" ? "join" : "leave",
+            });
+          }
+
+          return;
+        }
+
+        if (event.type === "message_created") {
+          void loadTripMessages(activeTrip.id);
+
+          if (event.actorUserId !== currentUser.id) {
+            if (!isChatOpen) {
+              setUnreadChatCount((current) => current + 1);
+            }
+
+            const displayName = event.actorDisplayName || "Thành viên";
+            setPresenceNotice({
+              id: event.id,
+              message: `${displayName} vừa gửi tin nhắn`,
+              tone: "message",
             });
           }
 
@@ -491,7 +535,7 @@ export function ExpensePlanner() {
       setIsLiveSyncConnected(false);
       unsubscribe();
     };
-  }, [activeTrip?.id, currentUser, loadTripData, loadTripLocations, loadTripPresence]);
+  }, [activeTrip?.id, currentUser, isChatOpen, loadTripData, loadTripLocations, loadTripMessages, loadTripPresence]);
 
   useEffect(() => {
     return () => {
@@ -513,11 +557,66 @@ export function ExpensePlanner() {
     };
   }, [presenceNotice]);
 
+  useEffect(() => {
+    if (!isChatOpen) {
+      return;
+    }
+
+    setUnreadChatCount(0);
+    chatMessageListRef.current?.scrollTo({
+      top: chatMessageListRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [chatMessages, isChatOpen]);
+
   function toggleTheme() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
     window.localStorage.setItem("trail-ledger-theme", nextTheme);
     document.documentElement.dataset.theme = nextTheme;
+  }
+
+  function handleToggleChat() {
+    const nextOpen = !isChatOpen;
+    setIsChatOpen(nextOpen);
+
+    if (nextOpen) {
+      setUnreadChatCount(0);
+      setChatError(null);
+
+      if (activeTrip?.id) {
+        void loadTripMessages(activeTrip.id);
+      }
+    }
+  }
+
+  async function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!activeTrip?.id || !currentUser || isSendingMessage) {
+      return;
+    }
+
+    const nextBody = chatDraft.trim();
+
+    if (!nextBody) {
+      return;
+    }
+
+    setIsSendingMessage(true);
+    setChatError(null);
+
+    try {
+      const message = await sendTripMessage(nextBody, activeTrip.id);
+      setChatMessages((current) => appendUniqueMessages(current, [message]));
+      setChatDraft("");
+      setIsChatOpen(true);
+      setUnreadChatCount(0);
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "Không gửi được tin nhắn");
+    } finally {
+      setIsSendingMessage(false);
+    }
   }
 
   function toggleParticipant(memberId: string) {
@@ -552,7 +651,7 @@ export function ExpensePlanner() {
 
     if (!("geolocation" in navigator)) {
       setLocationShareStatus("unavailable");
-      setApiError("Trinh duyet khong lay duoc vi tri GPS");
+      setApiError("Trình duyệt không lấy được vị trí GPS");
       return;
     }
 
@@ -594,14 +693,14 @@ export function ExpensePlanner() {
           })
           .catch((error) => {
             setLocationShareStatus("error");
-            setApiError(error instanceof Error ? error.message : "Khong chia se duoc vi tri");
+            setApiError(error instanceof Error ? error.message : "Không chia sẻ được vị trí");
           });
       },
       (error) => {
         clearLocationShareWatch();
         setIsSharingLocation(false);
         setLocationShareStatus(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable");
-        setApiError(error.code === error.PERMISSION_DENIED ? "Can cho phep quyen vi tri de chia se GPS" : "Khong lay duoc vi tri GPS");
+        setApiError(error.code === error.PERMISSION_DENIED ? "Cần cho phép quyền vị trí để chia sẻ GPS" : "Không lấy được vị trí GPS");
       },
       {
         enableHighAccuracy: true,
@@ -678,9 +777,9 @@ export function ExpensePlanner() {
         setAmount("");
         setSplitValues({});
         setActiveTab("expenses");
-        setApiError("Da luu tam chi phi trong may. Co mang lai se tu dong dong bo.");
+        setApiError("Đã lưu tạm chi phí trong máy. Có mạng lại sẽ tự động đồng bộ.");
       } else {
-        setApiError(error instanceof Error ? error.message : "Khong luu duoc chi phi");
+        setApiError(error instanceof Error ? error.message : "Không lưu được chi phí");
       }
     } finally {
       setIsSaving(false);
@@ -696,7 +795,7 @@ export function ExpensePlanner() {
       const user = await login(loginEmail, loginPassword);
       setCurrentUser(user);
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Dang nhap that bai");
+      setApiError(error instanceof Error ? error.message : "Đăng nhập thất bại");
     } finally {
       setIsLoggingIn(false);
     }
@@ -710,7 +809,7 @@ export function ExpensePlanner() {
       const user = await loginWithGoogle();
       setCurrentUser(user);
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Dang nhap Google that bai");
+      setApiError(error instanceof Error ? error.message : "Đăng nhập Google thất bại");
     } finally {
       setIsLoggingIn(false);
     }
@@ -739,14 +838,14 @@ export function ExpensePlanner() {
 
     try {
       const nextRoutePlan = await planRoute({
-        origin: routeOriginCoordinate ? routeOrigin.trim() || "Vi tri cua ban" : routeOrigin.trim(),
+        origin: routeOriginCoordinate ? routeOrigin.trim() || "Vị trí của bạn" : routeOrigin.trim(),
         destination: routeDestination.trim(),
         ...(routeOriginCoordinate ? { originCoordinate: routeOriginCoordinate } : {}),
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       setActiveTab("route");
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Khong ve duoc tuyen");
+      setApiError(error instanceof Error ? error.message : "Không vẽ được tuyến");
     } finally {
       setIsPlanningRoute(false);
     }
@@ -758,7 +857,7 @@ export function ExpensePlanner() {
     }
 
     if (!("geolocation" in navigator)) {
-      setApiError("Trinh duyet khong lay duoc vi tri GPS");
+      setApiError("Trình duyệt không lấy được vị trí GPS");
       return;
     }
 
@@ -772,19 +871,19 @@ export function ExpensePlanner() {
         lng: position.coords.longitude,
       };
 
-      setRouteOrigin("Vi tri cua toi");
+      setRouteOrigin("Vị trí của tôi");
       setRouteOriginCoordinate(originCoordinate);
       setIsPlanningRoute(true);
 
       const nextRoutePlan = await planRoute({
-        origin: "Vi tri cua toi",
+        origin: "Vị trí của tôi",
         destination: routeDestination.trim(),
         originCoordinate,
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       setActiveTab("route");
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Khong lay duoc vi tri hien tai");
+      setApiError(error instanceof Error ? error.message : "Không lấy được vị trí hiện tại");
     } finally {
       setIsUsingCurrentLocation(false);
       setIsPlanningRoute(false);
@@ -838,7 +937,7 @@ export function ExpensePlanner() {
       handleTripChange(trip.id);
       setActiveTab("route");
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Khong tao duoc chuyen di");
+      setApiError(error instanceof Error ? error.message : "Không tạo được chuyến đi");
     } finally {
       setIsCreatingTrip(false);
     }
@@ -889,7 +988,7 @@ export function ExpensePlanner() {
       setActiveTab("group");
       await loadTripData();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Khong them duoc thanh vien");
+      setApiError(error instanceof Error ? error.message : "Không thêm được thành viên");
     }
   }
 
@@ -900,7 +999,7 @@ export function ExpensePlanner() {
       await updateTripMember(memberId, { role }, selectedTripId);
       await loadTripData();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Khong doi duoc quyen");
+      setApiError(error instanceof Error ? error.message : "Không đổi được quyền");
     }
   }
 
@@ -911,7 +1010,7 @@ export function ExpensePlanner() {
       await removeTripMember(memberId, selectedTripId);
       await loadTripData();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Khong xoa duoc thanh vien");
+      setApiError(error instanceof Error ? error.message : "Không xóa được thành viên");
     }
   }
 
@@ -924,9 +1023,9 @@ export function ExpensePlanner() {
           </div>
           <div className="brand-copy">
             <p>TrailLedger</p>
-            <span>Secure trip workspace</span>
+            <span>Không gian chuyến đi bảo mật</span>
           </div>
-          <button className="icon-button" type="button" title="Doi giao dien" aria-label="Doi giao dien" onClick={toggleTheme}>
+          <button className="icon-button" type="button" title="Đổi giao diện" aria-label="Đổi giao diện" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
           </button>
         </header>
@@ -934,8 +1033,8 @@ export function ExpensePlanner() {
         <form className="expense-panel auth-panel" onSubmit={handleLogin}>
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Bao mat</span>
-              <h1>Dang nhap</h1>
+              <span className="eyebrow">Bảo mật</span>
+              <h1>Đăng nhập</h1>
             </div>
             <ShieldCheck size={24} />
           </div>
@@ -952,27 +1051,27 @@ export function ExpensePlanner() {
           </label>
 
           <label className="field auth-password">
-            <span>Mat khau</span>
+            <span>Mật khẩu</span>
             <input
               type="password"
               value={loginPassword}
               onChange={(event) => setLoginPassword(event.target.value)}
-              placeholder="Mat khau Firebase"
+              placeholder="Mật khẩu Firebase"
             />
           </label>
 
           <button className="auth-submit" type="submit" disabled={isLoggingIn}>
-            {isLoggingIn ? "Dang vao..." : "Dang nhap"}
+            {isLoggingIn ? "Đang vào..." : "Đăng nhập"}
           </button>
 
           <button className="google-submit" type="button" disabled={isLoggingIn} onClick={handleGoogleLogin}>
             <span aria-hidden="true">G</span>
-            Dang nhap voi Google
+            Đăng nhập với Google
           </button>
 
           <div className="rate-note">
             <ShieldCheck size={16} />
-            <span>Email/mat khau can tao user truoc. Google chi can bat provider trong Firebase Console.</span>
+            <span>Email/mật khẩu cần tạo user trước. Google chỉ cần bật provider trong Firebase Console.</span>
           </div>
         </form>
       </main>
@@ -988,22 +1087,22 @@ export function ExpensePlanner() {
         <div className="brand-copy">
           <p>TrailLedger</p>
             <span>
-              {currentUser.displayName} - {activeTrip?.title ?? "Chua co chuyen"}
+              {currentUser.displayName} - {activeTrip?.title ?? "Chưa có chuyến"}
             </span>
         </div>
         <div className="top-actions">
-          <button className="icon-button" type="button" title="Doi giao dien" aria-label="Doi giao dien" onClick={toggleTheme}>
+          <button className="icon-button" type="button" title="Đổi giao diện" aria-label="Đổi giao diện" onClick={toggleTheme}>
             {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
           </button>
           <button className="logout-button" type="button" onClick={handleLogout}>
-            Thoat
+            Thoát
           </button>
         </div>
       </header>
 
-      <section className="trip-manager" aria-label="Quan ly chuyen di">
+      <section className="trip-manager" aria-label="Quản lý chuyến đi">
         <label>
-          <span>Chuyen di</span>
+          <span>Chuyến đi</span>
           <select value={selectedTripId} onChange={(event) => handleTripChange(event.target.value)} disabled={!trips.length || isLoading}>
             {trips.map((trip) => (
               <option key={trip.id} value={trip.id}>
@@ -1014,17 +1113,17 @@ export function ExpensePlanner() {
         </label>
 
         <form className="trip-create-form" onSubmit={handleCreateTrip}>
-          <input value={newTripTitle} onChange={(event) => setNewTripTitle(event.target.value)} placeholder="Ten chuyen moi" />
-          <button type="submit" disabled={isCreatingTrip || !newTripTitle.trim()} title="Tao chuyen" aria-label="Tao chuyen">
+          <input value={newTripTitle} onChange={(event) => setNewTripTitle(event.target.value)} placeholder="Tên chuyến mới" />
+          <button type="submit" disabled={isCreatingTrip || !newTripTitle.trim()} title="Tạo chuyến" aria-label="Tạo chuyến">
             <Plus size={18} />
           </button>
         </form>
       </section>
 
-      <section className="trip-strip" aria-label="Thong tin chang di">
+      <section className="trip-strip" aria-label="Thông tin chặng đi">
         <div className="route-card">
           <div>
-            <span className="eyebrow">Chang hom nay</span>
+            <span className="eyebrow">Chặng hôm nay</span>
             <h1>{routePlan && routePlan.totalDistanceKm > 0 ? `${routePlan.totalDistanceKm} km` : "0 km"}</h1>
           </div>
           <div className="route-line" aria-hidden="true">
@@ -1033,40 +1132,40 @@ export function ExpensePlanner() {
             <span />
           </div>
           <div className="route-meta">
-            <span>{routePlan && routePlan.durationMinutes > 0 ? `${Math.round(routePlan.durationMinutes / 60)} gio` : "Chua co tuyen"}</span>
-            <strong>{routePlan?.destination || "Tao tuyen moi"}</strong>
+            <span>{routePlan && routePlan.durationMinutes > 0 ? `${Math.round(routePlan.durationMinutes / 60)} giờ` : "Chưa có tuyến"}</span>
+            <strong>{routePlan?.destination || "Tạo tuyến mới"}</strong>
           </div>
         </div>
 
         <div className={offlineReady ? "offline-pill ready" : "offline-pill"} aria-live="polite">
           {offlineReady ? <Check size={16} /> : <Download size={16} />}
-          <span>{isUsingOfflineRoute ? "Dang xem offline" : offlineReady ? "Da luu offline" : "Chua luu offline"}</span>
+          <span>{isUsingOfflineRoute ? "Đang xem offline" : offlineReady ? "Đã lưu offline" : "Chưa lưu offline"}</span>
         </div>
       </section>
 
-      <section className="summary-grid" aria-label="Tong quan chi phi">
-        <SummaryTile icon={<WalletCards size={18} />} label="Tong chi" value={formatMoney(totalVnd)} />
-        <SummaryTile icon={<ArrowRightLeft size={18} />} label="Can tra" value={`${settlements.length} luot`} />
-        <SummaryTile icon={<CloudRain size={18} />} label="Thoi tiet" value={`${routePlan?.summary.weatherAlerts ?? 0} canh bao`} />
+      <section className="summary-grid" aria-label="Tổng quan chi phí">
+        <SummaryTile icon={<WalletCards size={18} />} label="Tổng chi" value={formatMoney(totalVnd)} />
+        <SummaryTile icon={<ArrowRightLeft size={18} />} label="Cần trả" value={`${settlements.length} lượt`} />
+        <SummaryTile icon={<CloudRain size={18} />} label="Thời tiết" value={`${routePlan?.summary.weatherAlerts ?? 0} cảnh báo`} />
         <SummaryTile
           icon={<RefreshCw size={18} />}
-          label="Dong bo"
+          label="Đồng bộ"
           value={syncStatusValue}
         />
       </section>
 
-      <nav className="mobile-tabs" aria-label="Chuyen man hinh">
+      <nav className="mobile-tabs" aria-label="Chuyển màn hình">
         <button className={tabButtonClass(activeTab, "route")} type="button" onClick={() => setActiveTab("route")}>
           <Map size={17} />
-          <span>Ban do</span>
+          <span>Bản đồ</span>
         </button>
         <button className={tabButtonClass(activeTab, "expenses")} type="button" onClick={() => setActiveTab("expenses")}>
           <WalletCards size={17} />
-          <span>Chi phi</span>
+          <span>Chi phí</span>
         </button>
         <button className={tabButtonClass(activeTab, "group")} type="button" onClick={() => setActiveTab("group")}>
           <Users size={17} />
-          <span>Nhom</span>
+          <span>Nhóm</span>
         </button>
       </nav>
 
@@ -1080,17 +1179,17 @@ export function ExpensePlanner() {
         <RefreshCw size={17} className={isRefreshingData ? "spinning" : ""} />
         <span>
           {isRefreshingData
-            ? "Dang cap nhat du lieu nhom..."
+            ? "Đang cập nhật dữ liệu nhóm..."
             : isLiveSyncConnected
               ? lastLiveSyncEvent
                 ? `Live sync: ${liveEventLabel(lastLiveSyncEvent.type)}`
-                : "Live sync dang bat"
+                : "Live sync đang bật"
               : lastSyncedAt
-                ? `Da dong bo luc ${formatSyncTime(lastSyncedAt)}`
-                : "Chua dong bo du lieu nhom"}
+                ? `Đã đồng bộ lúc ${formatSyncTime(lastSyncedAt)}`
+                : "Chưa đồng bộ dữ liệu nhóm"}
         </span>
         <button type="button" disabled={isRefreshingData || isLoading} onClick={handleRefreshTripData}>
-          {isRefreshingData ? "Dang tai" : "Lam moi"}
+          {isRefreshingData ? "Đang tải" : "Làm mới"}
         </button>
       </div>
 
@@ -1098,7 +1197,7 @@ export function ExpensePlanner() {
         <div className={`presence-toast ${presenceNotice.tone}`} role="status">
           <Users size={17} />
           <span>{presenceNotice.message}</span>
-          <button type="button" aria-label="Dong thong bao" onClick={() => setPresenceNotice(null)}>
+          <button type="button" aria-label="Đóng thông báo" onClick={() => setPresenceNotice(null)}>
             x
           </button>
         </div>
@@ -1108,20 +1207,20 @@ export function ExpensePlanner() {
         <div className="sync-alert" role="status">
           <CloudOff size={17} />
           <span>
-            {queuedExpenseCount} chi phi dang cho dong bo{isSyncingExpenses ? "..." : ""}
+            {queuedExpenseCount} chi phí đang chờ đồng bộ{isSyncingExpenses ? "..." : ""}
           </span>
           <button type="button" disabled={isSyncingExpenses} onClick={handleSyncQueuedExpenses}>
-            {isSyncingExpenses ? "Dang dong bo" : "Dong bo"}
+            {isSyncingExpenses ? "Đang đồng bộ" : "Đồng bộ"}
           </button>
         </div>
       )}
 
       {!trips.length && !isLoading && (
-        <section className="empty-state" aria-label="Bat dau chuyen di">
+        <section className="empty-state" aria-label="Bắt đầu chuyến đi">
           <Map size={24} />
           <div>
-            <h2>Chua co chuyen di</h2>
-            <p>Tao chuyen dau tien, sau do them thanh vien, ve tuyen va ghi chi phi cua ban.</p>
+            <h2>Chưa có chuyến đi</h2>
+            <p>Tạo chuyến đầu tiên, sau đó thêm thành viên, vẽ tuyến và ghi chi phí của bạn.</p>
           </div>
         </section>
       )}
@@ -1153,25 +1252,25 @@ export function ExpensePlanner() {
             <form className="expense-panel" onSubmit={handleSubmit}>
           <div className="panel-heading">
             <div>
-              <span className="eyebrow">Khoan moi</span>
-              <h2>Ghi chi phi</h2>
+              <span className="eyebrow">Khoản mới</span>
+              <h2>Ghi chi phí</h2>
             </div>
-            <button className="primary-icon" type="submit" title="Luu chi phi" aria-label="Luu chi phi" disabled={isSaving || !members.length}>
+            <button className="primary-icon" type="submit" title="Lưu chi phí" aria-label="Lưu chi phí" disabled={isSaving || !members.length}>
               <Plus size={20} />
             </button>
           </div>
 
           <label className="field">
-            <span>Ten khoan</span>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Vi du: Xang, an trua, khach san" />
+            <span>Tên khoản</span>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ví dụ: xăng, ăn trưa, khách sạn" />
           </label>
 
           <div className="amount-row">
             <label className="field amount-field">
-              <span>So tien</span>
+              <span>Số tiền</span>
               <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" />
             </label>
-            <div className="currency-switch" aria-label="Tien te">
+            <div className="currency-switch" aria-label="Tiền tệ">
               {(["VND", "USD", "CNY"] satisfies CurrencyCode[]).map((code) => (
                 <button
                   key={code}
@@ -1186,7 +1285,7 @@ export function ExpensePlanner() {
             </div>
           </div>
 
-          <div className="category-row" aria-label="Danh muc">
+          <div className="category-row" aria-label="Danh mục">
             {categories.map((item) => {
               const Icon = item.icon;
 
@@ -1206,7 +1305,7 @@ export function ExpensePlanner() {
 
           <div className="select-row">
             <label className="field">
-              <span>Nguoi tra</span>
+              <span>Người trả</span>
               <select value={payerId} onChange={(event) => setPayerId(event.target.value)}>
                 {members.map((member) => (
                   <option key={member.id} value={member.id}>
@@ -1216,7 +1315,7 @@ export function ExpensePlanner() {
               </select>
             </label>
 
-            <div className="mode-switch" aria-label="Kieu chia">
+            <div className="mode-switch" aria-label="Kiểu chia">
               {(["equal", "percent", "share"] satisfies SplitMode[]).map((mode) => (
                 <button key={mode} className={splitMode === mode ? "active" : ""} type="button" onClick={() => setSplitMode(mode)}>
                   {modeLabel(mode)}
@@ -1225,7 +1324,7 @@ export function ExpensePlanner() {
             </div>
           </div>
 
-          <div className="member-grid" aria-label="Nguoi tham gia">
+          <div className="member-grid" aria-label="Người tham gia">
             {members.map((member) => {
               const active = participantIds.includes(member.id);
 
@@ -1244,7 +1343,7 @@ export function ExpensePlanner() {
           </div>
 
           {splitMode !== "equal" && (
-            <div className="split-grid" aria-label="Gia tri chia">
+            <div className="split-grid" aria-label="Giá trị chia">
               {participantIds.map((memberId) => {
                 const member = findMember(members, memberId);
 
@@ -1254,7 +1353,7 @@ export function ExpensePlanner() {
                     <input
                       inputMode="decimal"
                       value={splitValues[memberId] ?? ""}
-                      placeholder={splitMode === "percent" ? "%" : "phan"}
+                      placeholder={splitMode === "percent" ? "%" : "phần"}
                       onChange={(event) => updateSplitValue(memberId, event.target.value)}
                     />
                   </label>
@@ -1292,10 +1391,10 @@ export function ExpensePlanner() {
         </div>
           </section>
 
-          <section className="expense-list" aria-label="Chi phi gan day">
+          <section className="expense-list" aria-label="Chi phí gần đây">
             <div className="section-heading">
-              <h2>Chi phi gan day</h2>
-              <span>{expenses.length} khoan</span>
+              <h2>Chi phí gần đây</h2>
+              <span>{expenses.length} khoản</span>
             </div>
             {expenses.map((expense) => (
               <article className="expense-item" key={expense.id}>
@@ -1303,7 +1402,7 @@ export function ExpensePlanner() {
                 <div>
                   <h3>{expense.title}</h3>
                   <p>
-                    {expense.createdAt} - {findMember(members, expense.paidByUserId).name} tra - {participantCount(expense)} nguoi
+                    {expense.createdAt} - {findMember(members, expense.paidByUserId).name} trả - {participantCount(expense)} người
                   </p>
                 </div>
                 <strong>{formatMoney(Number(expense.money.amount), expense.money.currency)}</strong>
@@ -1312,17 +1411,114 @@ export function ExpensePlanner() {
           </section>
         </>
       )}
+
+      {trips.length > 0 && (
+        <ChatDock
+          currentUserId={currentUser.id}
+          draft={chatDraft}
+          error={chatError}
+          isOpen={isChatOpen}
+          isSending={isSendingMessage}
+          messageListRef={chatMessageListRef}
+          messages={chatMessages}
+          onDraftChange={setChatDraft}
+          onSend={handleSendChatMessage}
+          onToggle={handleToggleChat}
+          unreadCount={unreadChatCount}
+        />
+      )}
     </main>
+  );
+}
+
+function ChatDock({
+  currentUserId,
+  draft,
+  error,
+  isOpen,
+  isSending,
+  messageListRef,
+  messages,
+  onDraftChange,
+  onSend,
+  onToggle,
+  unreadCount,
+}: {
+  currentUserId: string;
+  draft: string;
+  error: string | null;
+  isOpen: boolean;
+  isSending: boolean;
+  messageListRef: RefObject<HTMLDivElement | null>;
+  messages: ApiTripMessage[];
+  onDraftChange(value: string): void;
+  onSend(event: FormEvent<HTMLFormElement>): void;
+  onToggle(): void;
+  unreadCount: number;
+}) {
+  return (
+    <aside className={isOpen ? "chat-dock open" : "chat-dock"} aria-label="Tin nhắn nhóm">
+      {isOpen && (
+        <section className="chat-panel">
+          <header className="chat-panel-head">
+            <div>
+              <span className="eyebrow">Tin nhắn</span>
+              <h2>Chat nhóm</h2>
+            </div>
+            <button type="button" title="Thu gọn chat" aria-label="Thu gọn chat" onClick={onToggle}>
+              <X size={18} />
+            </button>
+          </header>
+
+          <div className="chat-messages" ref={messageListRef}>
+            {messages.length ? (
+              messages.map((message) => {
+                const isSelf = message.userId === currentUserId;
+
+                return (
+                  <article className={isSelf ? "chat-message self" : "chat-message"} key={message.id}>
+                    <div>
+                      <strong>{isSelf ? "Bạn" : message.displayName}</strong>
+                      <span>{formatChatTime(message.createdAt)}</span>
+                    </div>
+                    <p>{message.body}</p>
+                  </article>
+                );
+              })
+            ) : (
+              <div className="chat-empty">
+                <MessageCircle size={22} />
+                <p>Chưa có tin nhắn. Gửi lời chào để mọi người biết bạn đang theo dõi phòng.</p>
+              </div>
+            )}
+          </div>
+
+          {error && <p className="chat-error">{error}</p>}
+
+          <form className="chat-compose" onSubmit={onSend}>
+            <input value={draft} onChange={(event) => onDraftChange(event.target.value)} maxLength={1000} placeholder="Nhập tin nhắn..." />
+            <button type="submit" disabled={isSending || !draft.trim()} title="Gửi tin nhắn" aria-label="Gửi tin nhắn">
+              <Send size={18} />
+            </button>
+          </form>
+        </section>
+      )}
+
+      <button className="chat-bubble" type="button" title={isOpen ? "Thu gọn chat" : "Mở chat nhóm"} aria-label={isOpen ? "Thu gọn chat" : "Mở chat nhóm"} onClick={onToggle}>
+        <MessageCircle size={22} />
+        {unreadCount > 0 && <span>{Math.min(unreadCount, 9)}</span>}
+      </button>
+    </aside>
   );
 }
 
 function PresencePanel({ currentUserId, presenceUsers }: { currentUserId: string; presenceUsers: ApiPresenceUser[] }) {
   return (
-    <section className="presence-panel" aria-label="Hien dien trong phong">
+    <section className="presence-panel" aria-label="Hiện diện trong phòng">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Hien dien</span>
-          <h2>{presenceUsers.length} dang trong phong</h2>
+          <span className="eyebrow">Hiện diện</span>
+          <h2>{presenceUsers.length} đang trong phòng</h2>
         </div>
         <Users size={22} />
       </div>
@@ -1333,17 +1529,17 @@ function PresencePanel({ currentUserId, presenceUsers }: { currentUserId: string
             <div className={user.userId === currentUserId ? "presence-row self" : "presence-row"} key={user.userId}>
               <Avatar member={{ id: user.userId, name: user.displayName, initials: createInitials(user.displayName) }} />
               <div>
-                <strong>{user.userId === currentUserId ? "Ban" : user.displayName}</strong>
+                <strong>{user.userId === currentUserId ? "Bạn" : user.displayName}</strong>
                 <span>
-                  Online tu {formatLocationTime(user.onlineSince)}
-                  {user.connectionCount > 1 ? ` - ${user.connectionCount} thiet bi` : ""}
+                  Online từ {formatLocationTime(user.onlineSince)}
+                  {user.connectionCount > 1 ? ` - ${user.connectionCount} thiết bị` : ""}
                 </span>
               </div>
-              <i aria-label="Dang online" />
+              <i aria-label="Đang online" />
             </div>
           ))
         ) : (
-          <p>Chua thay ai trong phong. Khi co nguoi mo chuyen di, danh sach se tu hien.</p>
+          <p>Chưa thấy ai trong phòng. Khi có người mở chuyến đi, danh sách sẽ tự hiện.</p>
         )}
       </div>
     </section>
@@ -1360,11 +1556,11 @@ function SettlementPanel({
   settlements: ApiSettlement[];
 }) {
   return (
-    <section className="settlement-panel" aria-label="Thanh toan de xuat">
+    <section className="settlement-panel" aria-label="Thanh toán đề xuất">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Cong no nhom</span>
-          <h2>Ai tra ai</h2>
+          <span className="eyebrow">Công nợ nhóm</span>
+          <h2>Ai trả ai</h2>
         </div>
         <ArrowRightLeft size={22} />
       </div>
@@ -1376,7 +1572,7 @@ function SettlementPanel({
               <Avatar member={findMember(members, settlement.fromUserId)} />
               <div className="settlement-copy">
                 <strong>
-                  {findMember(members, settlement.fromUserId).name} tra {findMember(members, settlement.toUserId).name}
+                  {findMember(members, settlement.fromUserId).name} trả {findMember(members, settlement.toUserId).name}
                 </strong>
                 <span>{formatMoney(Number(settlement.amountMinor), settlement.currency)}</span>
               </div>
@@ -1384,7 +1580,7 @@ function SettlementPanel({
             </div>
           ))
         ) : (
-          <p className="empty-panel-note">Chua co khoan can thanh toan.</p>
+          <p className="empty-panel-note">Chưa có khoản cần thanh toán.</p>
         )}
       </div>
 
@@ -1434,11 +1630,11 @@ function MemberManagerPanel({
   onRoleChange: (memberId: string, role: ApiTripRole) => void;
 }) {
   return (
-    <section className="member-manager-panel" aria-label="Quan ly thanh vien">
+    <section className="member-manager-panel" aria-label="Quản lý thành viên">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Quan ly nhom</span>
-          <h2>Thanh vien</h2>
+          <span className="eyebrow">Quản lý nhóm</span>
+          <h2>Thành viên</h2>
         </div>
         <span className="role-pill">{currentTripRole}</span>
       </div>
@@ -1447,13 +1643,13 @@ function MemberManagerPanel({
         <input
           value={newMemberEmail}
           onChange={(event) => onMemberEmailChange(event.target.value)}
-          placeholder="Email dang nhap"
+          placeholder="Email đăng nhập"
           disabled={!canManageTripMembers}
         />
         <input
           value={newMemberName}
           onChange={(event) => onMemberNameChange(event.target.value)}
-          placeholder="Ten hien thi"
+          placeholder="Tên hiển thị"
           disabled={!canManageTripMembers}
         />
         <select value={newMemberRole} onChange={(event) => onMemberRoleChange(event.target.value as ApiTripRole)} disabled={!canManageTripMembers}>
@@ -1461,7 +1657,7 @@ function MemberManagerPanel({
           <option value="editor">editor</option>
           <option value="owner">owner</option>
         </select>
-        <button type="submit" disabled={!canManageTripMembers} title="Them thanh vien" aria-label="Them thanh vien">
+        <button type="submit" disabled={!canManageTripMembers} title="Thêm thành viên" aria-label="Thêm thành viên">
           <Plus size={18} />
         </button>
       </form>
@@ -1482,8 +1678,8 @@ function MemberManagerPanel({
             </select>
             <button
               type="button"
-              title="Xoa thanh vien"
-              aria-label="Xoa thanh vien"
+              title="Xóa thành viên"
+              aria-label="Xóa thành viên"
               disabled={!canManageTripMembers || member.id === currentUserId}
               onClick={() => onRemoveMember(member.id)}
             >
@@ -1532,7 +1728,7 @@ function RouteIntelligence({
   routePlan: ApiRoutePlan;
 }) {
   return (
-    <section className="route-intel" aria-label="Lo trinh va thoi tiet">
+    <section className="route-intel" aria-label="Lộ trình và thời tiết">
       <div className="panel-heading">
         <div>
           <span className="eyebrow">Smart Routing</span>
@@ -1543,22 +1739,22 @@ function RouteIntelligence({
 
       <form className="route-builder" onSubmit={onPlanRoute}>
         <label>
-          <span>Diem di</span>
-          <input value={origin} onChange={(event) => onOriginChange(event.target.value)} placeholder="Diem xuat phat" />
+          <span>Điểm đi</span>
+          <input value={origin} onChange={(event) => onOriginChange(event.target.value)} placeholder="Điểm xuất phát" />
         </label>
         <label>
-          <span>Diem den</span>
-          <input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder="Diem den" />
+          <span>Điểm đến</span>
+          <input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder="Điểm đến" />
         </label>
-        {originCoordinate && <p className="route-gps-note">Dang dung GPS lam diem xuat phat.</p>}
+        {originCoordinate && <p className="route-gps-note">Đang dùng GPS làm điểm xuất phát.</p>}
         <div className="route-builder-actions">
           <button className="location-route-button" type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={onPlanRouteFromCurrentLocation}>
             <MapPin size={17} />
-            <span>{isUsingCurrentLocation ? "Dang lay GPS..." : "Tu vi tri cua toi"}</span>
+            <span>{isUsingCurrentLocation ? "Đang lấy GPS..." : "Từ vị trí của tôi"}</span>
           </button>
           <button type="submit" disabled={isPlanningRoute || isUsingCurrentLocation}>
             <Navigation size={17} />
-            <span>{isPlanningRoute ? "Dang ve..." : "Ve tuyen"}</span>
+            <span>{isPlanningRoute ? "Đang vẽ..." : "Vẽ tuyến"}</span>
           </button>
         </div>
       </form>
@@ -1573,24 +1769,24 @@ function RouteIntelligence({
             <strong>{routePlan.offlinePack.mapTilesMb} MB offline</strong>
           </div>
           <div className="route-alerts">
-            <MiniMetric label="Diem dung" value={`${routePlan.summary.suggestedStops}`} />
-            <MiniMetric label="Thoi tiet" value={`${routePlan.summary.weatherAlerts}`} />
-            <MiniMetric label="Cua khau" value={`${routePlan.summary.borderAlerts}`} />
+            <MiniMetric label="Điểm dừng" value={`${routePlan.summary.suggestedStops}`} />
+            <MiniMetric label="Thời tiết" value={`${routePlan.summary.weatherAlerts}`} />
+            <MiniMetric label="Cửa khẩu" value={`${routePlan.summary.borderAlerts}`} />
           </div>
         </div>
 
         <div className="route-side-stack">
           <div className="next-stop-card">
-            <span className="eyebrow">Can chu y tiep theo</span>
-            <strong>{routePlan.summary.nextCriticalStop ?? "Khong co canh bao"}</strong>
-            <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chang hien tai on dinh."}</p>
+            <span className="eyebrow">Cần chú ý tiếp theo</span>
+            <strong>{routePlan.summary.nextCriticalStop ?? "Không có cảnh báo"}</strong>
+            <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chặng hiện tại ổn định."}</p>
           </div>
 
           <div className="group-location-card">
             <div className="group-location-head">
               <div>
-                <span className="eyebrow">GPS nhom</span>
-                <strong>{memberLocations.length} dang chia se</strong>
+                <span className="eyebrow">GPS nhóm</span>
+                <strong>{memberLocations.length} đang chia sẻ</strong>
               </div>
               <button
                 className={isSharingLocation ? "location-share-button active" : "location-share-button"}
@@ -1598,7 +1794,7 @@ function RouteIntelligence({
                 onClick={isSharingLocation ? onStopSharingLocation : onStartSharingLocation}
               >
                 <Navigation size={16} />
-                <span>{isSharingLocation ? "Tat" : "Bat"}</span>
+                <span>{isSharingLocation ? "Tắt" : "Bật"}</span>
               </button>
             </div>
 
@@ -1610,13 +1806,13 @@ function RouteIntelligence({
                   <div className="group-location-row" key={location.userId}>
                     <span>{createLocationInitials(location.displayName || location.userId)}</span>
                     <div>
-                      <strong>{location.userId === currentUserId ? "Ban" : location.displayName || "Thanh vien"}</strong>
+                      <strong>{location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên"}</strong>
                       <small>{formatLocationTime(location.sharedAt)}</small>
                     </div>
                   </div>
                 ))
               ) : (
-                <p>Chua ai bat chia se GPS.</p>
+                <p>Chưa ai bật chia sẻ GPS.</p>
               )}
             </div>
           </div>
@@ -1703,9 +1899,9 @@ function OpenStreetRouteMap({
             iconAnchor: [10, 10],
             iconSize: [20, 20],
           }),
-          title: "Vi tri cua ban",
+          title: "Vị trí của bạn",
         })
-        .bindPopup("Vi tri cua ban")
+        .bindPopup("Vị trí của bạn")
         .addTo(map);
     } else {
       userMarkerRef.current.setLatLng(latLng);
@@ -1787,7 +1983,7 @@ function OpenStreetRouteMap({
 
       for (const location of memberLocations) {
         const latLng = leaflet.latLng(location.latitude, location.longitude);
-        const label = location.userId === currentUserId ? "Ban" : location.displayName || "Thanh vien";
+        const label = location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên";
         const initials = createLocationInitials(label);
 
         leaflet
@@ -1800,7 +1996,7 @@ function OpenStreetRouteMap({
             }),
             title: label,
           })
-          .bindPopup(`<strong>${escapeHtml(label)}</strong><br />Cap nhat ${escapeHtml(formatLocationTime(location.sharedAt))}`)
+          .bindPopup(`<strong>${escapeHtml(label)}</strong><br />Cập nhật ${escapeHtml(formatLocationTime(location.sharedAt))}`)
           .addTo(layer);
 
         if (location.accuracyMeters && location.accuracyMeters > 0) {
@@ -1931,7 +2127,7 @@ function OpenStreetRouteMap({
             onClick={isFollowingUser ? stopFollowingUser : startFollowingUser}
           >
             <Navigation size={15} />
-            <span>{isFollowingUser ? "Dang theo GPS" : "Theo GPS"}</span>
+            <span>{isFollowingUser ? "Đang theo GPS" : "Theo GPS"}</span>
           </button>
         </div>
       )}
@@ -1970,8 +2166,8 @@ function WaypointCard({ waypoint }: { waypoint: ApiRouteWaypoint }) {
         <div>
           <strong>{waypoint.weather.condition}</strong>
           <span>
-            {waypoint.weather.tempC}C, mua {waypoint.weather.rainChance}%, gio {waypoint.weather.windKph} km/h
-            {typeof waypoint.weather.precipitationMm === "number" ? `, luong mua ${waypoint.weather.precipitationMm} mm` : ""}
+            {waypoint.weather.tempC}°C, mưa {waypoint.weather.rainChance}%, gió {waypoint.weather.windKph} km/h
+            {typeof waypoint.weather.precipitationMm === "number" ? `, lượng mưa ${waypoint.weather.precipitationMm} mm` : ""}
           </span>
         </div>
       </div>
@@ -1986,7 +2182,7 @@ function WaypointCard({ waypoint }: { waypoint: ApiRouteWaypoint }) {
             {waypoint.stop.label}
           </span>
         )}
-        {waypoint.borderChecklist.length > 0 && <span className="stop-pill required">Giay to: {waypoint.borderChecklist.length}</span>}
+        {waypoint.borderChecklist.length > 0 && <span className="stop-pill required">Giấy tờ: {waypoint.borderChecklist.length}</span>}
       </div>
     </article>
   );
@@ -2023,10 +2219,10 @@ function modeLabel(mode: SplitMode): string {
   }
 
   if (mode === "share") {
-    return "Phan";
+    return "Phần";
   }
 
-  return "Deu";
+  return "Đều";
 }
 
 function formatSyncTime(date: Date): string {
@@ -2036,24 +2232,55 @@ function formatSyncTime(date: Date): string {
   }).format(date);
 }
 
+function formatChatTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "vừa xong";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function appendUniqueMessages(current: ApiTripMessage[], nextMessages: ApiTripMessage[]): ApiTripMessage[] {
+  const seen = new Set(current.map((message) => message.id));
+  const merged = [...current];
+
+  for (const message of nextMessages) {
+    if (!seen.has(message.id)) {
+      seen.add(message.id);
+      merged.push(message);
+    }
+  }
+
+  return merged.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+}
+
 function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
   if (type === "expense_created") {
-    return "co chi phi moi";
+    return "có chi phí mới";
   }
 
   if (type === "member_changed") {
-    return "nhom vua doi";
+    return "nhóm vừa đổi";
+  }
+
+  if (type === "message_created") {
+    return "có tin nhắn mới";
   }
 
   if (type === "location_updated") {
-    return "GPS nhom vua cap nhat";
+    return "GPS nhóm vừa cập nhật";
   }
 
   if (type === "location_stopped") {
-    return "co nguoi tat GPS";
+    return "có người tắt GPS";
   }
 
-  return "tuyen vua doi";
+  return "tuyến vừa đổi";
 }
 
 function tabButtonClass(activeTab: MobileTab, tab: MobileTab): string {
@@ -2305,7 +2532,7 @@ function getCurrentBrowserPosition(): Promise<GeolocationPosition> {
     navigator.geolocation.getCurrentPosition(
       resolve,
       (error) => {
-        reject(new Error(error.code === error.PERMISSION_DENIED ? "Can cho phep quyen vi tri de ve tu GPS" : "Khong lay duoc vi tri hien tai"));
+        reject(new Error(error.code === error.PERMISSION_DENIED ? "Cần cho phép quyền vị trí để vẽ từ GPS" : "Không lấy được vị trí hiện tại"));
       },
       {
         enableHighAccuracy: true,
@@ -2344,10 +2571,10 @@ function weatherSourceLabel(source: NonNullable<ApiRouteWaypoint["weather"]["sou
   }
 
   if (source === "fallback") {
-    return "Du phong";
+    return "Dự phòng";
   }
 
-  return "Du lieu mau";
+  return "Dữ liệu mẫu";
 }
 
 type LeafletMapStatus = "loading" | "ready" | "error";
@@ -2356,27 +2583,27 @@ type LocationShareStatus = "idle" | "starting" | "sharing" | "denied" | "unavail
 
 function leafletMapStatusText(status: LeafletMapStatus): string {
   if (status === "error") {
-    return "Khong tai duoc ban do";
+    return "Không tải được bản đồ";
   }
 
-  return "Dang tai OpenStreetMap";
+  return "Đang tải OpenStreetMap";
 }
 
 function locationWatchStatusText(status: LocationWatchStatus): string {
   if (status === "searching") {
-    return "Dang tim vi tri GPS";
+    return "Đang tìm vị trí GPS";
   }
 
   if (status === "watching") {
-    return "Ban do dang bam theo ban";
+    return "Bản đồ đang bám theo bạn";
   }
 
   if (status === "denied") {
-    return "Can cho phep quyen vi tri";
+    return "Cần cho phép quyền vị trí";
   }
 
   if (status === "unavailable") {
-    return "Khong lay duoc vi tri";
+    return "Không lấy được vị trí";
   }
 
   return "";
@@ -2384,23 +2611,23 @@ function locationWatchStatusText(status: LocationWatchStatus): string {
 
 function locationShareStatusText(status: LocationShareStatus): string {
   if (status === "starting") {
-    return "Dang xin GPS de chia se cho nhom";
+    return "Đang xin GPS để chia sẻ cho nhóm";
   }
 
   if (status === "sharing") {
-    return "Dang chia se vi tri moi 15 giay";
+    return "Đang chia sẻ vị trí mỗi 15 giây";
   }
 
   if (status === "denied") {
-    return "Can cho phep quyen vi tri";
+    return "Cần cho phép quyền vị trí";
   }
 
   if (status === "unavailable") {
-    return "Khong lay duoc GPS tren may nay";
+    return "Không lấy được GPS trên máy này";
   }
 
   if (status === "error") {
-    return "Chua gui duoc vi tri, se thu lai";
+    return "Chưa gửi được vị trí, sẽ thử lại";
   }
 
   return "";
