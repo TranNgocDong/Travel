@@ -22,15 +22,55 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const localCacheResetScript =
+  const cacheResetScript =
     process.env.NODE_ENV === "production"
-      ? null
+      ? `
+        (function () {
+          var resetKey = "trail-ledger-cache-reset-v6";
+          var hadOldCache = false;
+
+          if (sessionStorage.getItem(resetKey)) {
+            return;
+          }
+
+          Promise.all([
+            "serviceWorker" in navigator
+              ? navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                  hadOldCache = hadOldCache || registrations.length > 0;
+                  return Promise.all(registrations.map(function (registration) {
+                    return registration.unregister();
+                  }));
+                })
+              : Promise.resolve(),
+            "caches" in window
+              ? caches.keys().then(function (keys) {
+                  var trailLedgerCaches = keys.filter(function (key) {
+                    return key.indexOf("trail-ledger") === 0;
+                  });
+
+                  hadOldCache = hadOldCache || trailLedgerCaches.length > 0;
+                  return Promise.all(trailLedgerCaches.map(function (key) {
+                    return caches.delete(key);
+                  }));
+                })
+              : Promise.resolve()
+          ]).finally(function () {
+            sessionStorage.setItem(resetKey, "1");
+
+            if (hadOldCache) {
+              var separator = location.search ? "&" : "?";
+              location.replace(location.pathname + location.search + separator + "cache-reset=1");
+            }
+          });
+        })();
+      `
       : `
         (function () {
-          var resetKey = "trail-ledger-dev-cache-reset-v4";
+          var resetKey = "trail-ledger-dev-cache-reset-v6";
           if (location.hostname !== "localhost" || sessionStorage.getItem(resetKey)) {
             return;
           }
+
           sessionStorage.setItem(resetKey, "1");
           Promise.all([
             "serviceWorker" in navigator
@@ -58,9 +98,7 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <head>
-        {localCacheResetScript && (
-          <Script id="trail-ledger-dev-cache-reset" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: localCacheResetScript }} />
-        )}
+        <Script id="trail-ledger-cache-reset" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: cacheResetScript }} />
       </head>
       <body>
         {children}
