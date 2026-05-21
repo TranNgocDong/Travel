@@ -4037,14 +4037,17 @@ body {
 .auth-page.waymate-auth {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.06fr) minmax(420px, 0.94fr);
+  grid-template-columns: minmax(360px, 640px) minmax(360px, 480px);
+  column-gap: clamp(36px, 6vw, 120px);
+  justify-content: center;
   min-height: 100svh;
   overflow: hidden;
   background-attachment: scroll;
   background-color: #f8fbf4;
   background-position: center;
   background-repeat: no-repeat;
-  background-size: min(100vw, 1440px) auto;
+  background-size: cover;
+  padding-inline: clamp(20px, 3vw, 64px);
 }
 
 .auth-page.waymate-auth::before {
@@ -4081,6 +4084,12 @@ body {
   background: transparent;
   padding: clamp(28px, 5vw, 64px);
   pointer-events: none;
+}
+
+.auth-page.waymate-auth .auth-hero {
+  border-right: 0;
+  min-width: 0;
+  padding-inline: 0;
 }
 
 .waymate-auth .auth-brand {
@@ -4180,11 +4189,16 @@ body {
 }
 
 .auth-page.waymate-auth .auth-panel-zone {
+  min-width: 0;
+  padding-inline: 0;
+}
+
+.auth-page.waymate-auth .auth-panel-zone {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42));
 }
 
 .waymate-auth .auth-card {
-  width: min(440px, calc(100vw - 32px));
+  width: min(440px, 100%);
   min-height: 0;
   max-height: calc(100svh - 64px);
   gap: 13px;
@@ -4490,4 +4504,22 @@ body {
 :root[data-theme="dark"] .waymate-auth .auth-language-button {
   background: rgba(10, 25, 21, 0.9);
   color: #eafff8;
+}
+
+@media (min-width: 1600px) {
+  .auth-page.waymate-auth {
+    grid-template-columns: 620px 460px;
+    column-gap: clamp(64px, 7vw, 150px);
+  }
+}
+
+@media (min-width: 981px) and (max-height: 760px) {
+  .waymate-auth .auth-hero-copy h1 {
+    font-size: clamp(2rem, 2.65vw, 3rem);
+  }
+
+  .waymate-auth .auth-card {
+    gap: 10px;
+    padding: 22px;
+  }
 }
