@@ -3043,3 +3043,72 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.recovery-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.recovery-card {
+  display: grid;
+  width: min(100%, 560px);
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 22px;
+}
+
+.recovery-card h1,
+.recovery-card p {
+  margin: 0;
+}
+
+.recovery-card h1 {
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.recovery-card p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.recovery-card pre {
+  max-height: 120px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.recovery-actions button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 850;
+  padding: 0 16px;
+}
+
+.recovery-actions .secondary {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+}

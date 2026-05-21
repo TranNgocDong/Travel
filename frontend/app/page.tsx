@@ -1,5 +1,10 @@
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { ExpensePlanner } from "@/components/ExpensePlanner";
 
 export default function Home() {
-  return <ExpensePlanner />;
+  return (
+    <AppErrorBoundary>
+      <ExpensePlanner />
+    </AppErrorBoundary>
+  );
 }
