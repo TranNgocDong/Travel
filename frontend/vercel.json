@@ -1,0 +1,5 @@
+{
+  "buildCommand": "NEXT_STATIC_EXPORT=true npm run build",
+  "installCommand": "npm ci",
+  "outputDirectory": "out"
+}
