@@ -25,10 +25,11 @@ import {
   type TripMapMarkerKind,
   type TripMapMarkerRepository,
 } from "./mapMarkers/tripMapMarkerRepository.js";
+import { findOpenStreetMapPoisForRoute, type TripPoiKind } from "./poi/openStreetMapPoi.js";
 import { InMemoryRoutePlanRepository, PostgresRoutePlanRepository, type RoutePlanRepository } from "./route/routePlanRepository.js";
 import { buildOpenStreetRoutePlan, buildStarterRoutePlan, reverseGeocodePoint, RoutePlannerError } from "./route/routePlanner.js";
 import { canManageMembers, canWriteTrip, TripAccessService, type TripRole } from "./trips/tripAccess.js";
-import { InMemoryTripRepository, PostgresTripRepository, type TripRepository } from "./trips/tripRepository.js";
+import { InMemoryTripRepository, PostgresTripRepository, type TripRepository, type TripStatus } from "./trips/tripRepository.js";
 import {
   InMemoryTripMemberRepository,
   PostgresTripMemberRepository,
@@ -161,6 +162,8 @@ app.post("/api/v1/trips", async (request, reply) => {
     userId: user.id,
     displayName: user.displayName,
     role: "owner",
+    active: true,
+    removedAt: null,
   });
   await tripRepository.linkUser(trip.id, user.id, "owner");
 
@@ -170,6 +173,66 @@ app.post("/api/v1/trips", async (request, reply) => {
       role: "owner",
     },
   });
+});
+
+app.patch("/api/v1/trips/:tripId/status", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "manage"))) {
+    return;
+  }
+
+  const parsed = parseTripStatusBody(request.body);
+
+  if (!parsed.ok) {
+    return reply.status(400).send({
+      error: "VALIDATION_ERROR",
+      message: parsed.message,
+    });
+  }
+
+  const trip = await tripRepository.updateStatus(tripId, parsed.status);
+
+  if (!trip) {
+    return reply.status(404).send({
+      error: "TRIP_NOT_FOUND",
+      message: "Không tìm thấy chuyến đi",
+    });
+  }
+
+  publishTripChange(tripId, user.id, "trip_changed", user.displayName);
+
+  return {
+    trip: {
+      ...trip,
+      role: "owner" satisfies TripRole,
+    },
+  };
+});
+
+app.delete("/api/v1/trips/:tripId", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "manage"))) {
+    return;
+  }
+
+  await tripRepository.delete(tripId);
+  publishTripChange(tripId, user.id, "trip_deleted", user.displayName);
+
+  return reply.status(204).send();
 });
 
 app.get("/api/v1/trips/:tripId/bootstrap", async (request, reply) => {
@@ -217,6 +280,33 @@ app.get("/api/v1/trips/:tripId/route-plan", async (request, reply) => {
   return {
     routePlan: savedRoutePlan ?? buildStarterRoutePlan(tripId),
   };
+});
+
+app.get("/api/v1/trips/:tripId/pois", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const routePlan = (await routePlanRepository.findByTrip(tripId)) ?? buildStarterRoutePlan(tripId);
+
+  try {
+    return {
+      pois: await findOpenStreetMapPoisForRoute(routePlan, parsePoiQuery(request.query)),
+    };
+  } catch {
+    return {
+      pois: [],
+      warning: "Không lấy được địa điểm từ OpenStreetMap lúc này",
+    };
+  }
 });
 
 app.get("/api/v1/trips/:tripId/events", async (request, reply) => {
@@ -646,6 +736,8 @@ app.post("/api/v1/trips/:tripId/members", async (request, reply) => {
     userId: parsed.userId,
     displayName: parsed.displayName,
     role: parsed.role ?? "viewer",
+    active: true,
+    removedAt: null,
   };
 
   try {
@@ -742,16 +834,26 @@ app.delete("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => 
     });
   }
 
-  const expenses = await repository.listByTrip(tripId);
+  const members = await memberRepository.listByTrip(tripId);
+  const activeOwners = members.filter((member) => member.active && member.role === "owner");
+  const targetMember = members.find((member) => member.userId === memberId);
 
-  if (isMemberReferenced(expenses, memberId)) {
-    return reply.status(409).send({
-      error: "MEMBER_HAS_EXPENSES",
-      message: "Member already appears in expenses and cannot be removed",
+  if (!targetMember || !targetMember.active) {
+    return reply.status(404).send({
+      error: "MEMBER_NOT_FOUND",
+      message: "Không tìm thấy thành viên trong phòng",
+    });
+  }
+
+  if (targetMember.role === "owner" && activeOwners.length <= 1) {
+    return reply.status(400).send({
+      error: "LAST_OWNER_REMOVE",
+      message: "Phòng phải còn ít nhất một chủ phòng",
     });
   }
 
   await memberRepository.remove(tripId, memberId);
+  await locationRepository.remove(tripId, memberId);
   await tripRepository.unlinkUser(tripId, memberId);
   publishTripChange(tripId, user.id, "member_changed");
   return reply.status(204).send();
@@ -807,8 +909,18 @@ app.post("/api/v1/trips/:tripId/expenses", async (request, reply) => {
     }).format(new Date()),
   };
 
+  const members = await memberRepository.listByTrip(tripId);
+  const activeMembers = members.filter(isActiveTripMember);
+
+  if (!isExpenseLimitedToMembers(expense, activeMembers)) {
+    return reply.status(400).send({
+      error: "INACTIVE_MEMBER_IN_EXPENSE",
+      message: "Chỉ có thể ghi chi phí cho thành viên đang ở trong phòng",
+    });
+  }
+
   const nextExpenses = [expense, ...(await repository.listByTrip(tripId))];
-  const participants = toSplitParticipants(await memberRepository.listByTrip(tripId));
+  const participants = toSplitParticipants(members);
 
   try {
     calculateSplitBill({
@@ -984,6 +1096,31 @@ function parseCreateTripBody(body: unknown):
   };
 }
 
+function parseTripStatusBody(body: unknown):
+  | {
+      ok: true;
+      status: TripStatus;
+    }
+  | {
+      ok: false;
+      message: string;
+    } {
+  if (!body || typeof body !== "object") {
+    return { ok: false, message: "Request body must be an object" };
+  }
+
+  const status = parseTripStatus((body as Record<string, unknown>).status);
+
+  if (!status) {
+    return { ok: false, message: "Trạng thái chuyến đi không hợp lệ" };
+  }
+
+  return {
+    ok: true,
+    status,
+  };
+}
+
 function createTripId(title: string): string {
   const slug = title
     .normalize("NFD")
@@ -1000,6 +1137,30 @@ function parseMessageLimit(query: unknown): number {
   const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
   const parsed = parseFiniteNumber(input.limit);
   return parsed === null ? 50 : Math.max(1, Math.min(100, Math.trunc(parsed)));
+}
+
+function parsePoiQuery(query: unknown): { kinds: TripPoiKind[]; limit: number } {
+  const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
+  const kinds = parsePoiKinds(input.types);
+  const limit = parseFiniteNumber(input.limit);
+
+  return {
+    kinds: kinds.length ? kinds : ["food", "lodging", "fuel"],
+    limit: limit === null ? 80 : Math.max(1, Math.min(120, Math.trunc(limit))),
+  };
+}
+
+function parsePoiKinds(value: unknown): TripPoiKind[] {
+  const rawValues = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  const kinds = new Set<TripPoiKind>();
+
+  for (const raw of rawValues) {
+    if (raw === "food" || raw === "lodging" || raw === "fuel") {
+      kinds.add(raw);
+    }
+  }
+
+  return [...kinds];
 }
 
 function parseMessageBody(body: unknown):
@@ -1366,8 +1527,20 @@ function parseRole(value: unknown): TripRole | null {
   return value === "owner" || value === "editor" || value === "viewer" ? value : null;
 }
 
+function parseTripStatus(value: unknown): TripStatus | null {
+  return value === "active" || value === "completed" || value === "archived" ? value : null;
+}
+
 function parseMapMarkerKind(value: unknown): TripMapMarkerKind | null {
-  return value === "ping" || value === "meetup" || value === "fuel" || value === "repair" || value === "warning" ? value : null;
+  return value === "ping" ||
+    value === "meetup" ||
+    value === "fuel" ||
+    value === "repair" ||
+    value === "warning" ||
+    value === "food" ||
+    value === "lodging"
+    ? value
+    : null;
 }
 
 function parseMemberId(params: unknown): string | null {
@@ -1386,22 +1559,26 @@ function parseMarkerId(params: unknown): string | null {
   return parseString((params as { markerId?: unknown }).markerId);
 }
 
-function isMemberReferenced(expenses: StoredExpense[], userId: string): boolean {
-  return expenses.some((expense) => {
-    if (expense.paidByUserId === userId) {
-      return true;
-    }
+function isActiveTripMember(member: TripMember): boolean {
+  return member.active;
+}
 
-    if (expense.split.type === "equal") {
-      return expense.split.userIds.includes(userId);
-    }
+function isExpenseLimitedToMembers(expense: StoredExpense, members: TripMember[]): boolean {
+  const activeMemberIds = new Set(members.map((member) => member.userId));
 
-    if (expense.split.type === "percentage" || expense.split.type === "share") {
-      return expense.split.shares.some((share) => share.userId === userId);
-    }
+  if (!activeMemberIds.has(expense.paidByUserId)) {
+    return false;
+  }
 
-    return expense.split.amounts.some((amount) => amount.userId === userId);
-  });
+  if (expense.split.type === "equal") {
+    return expense.split.userIds.every((userId) => activeMemberIds.has(userId));
+  }
+
+  if (expense.split.type === "percentage" || expense.split.type === "share") {
+    return expense.split.shares.every((share) => activeMemberIds.has(share.userId));
+  }
+
+  return expense.split.amounts.every((amount) => activeMemberIds.has(amount.userId));
 }
 
 function parseSplit(value: unknown):

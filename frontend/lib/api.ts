@@ -36,11 +36,14 @@ export type ApiParticipant = {
 };
 
 export type ApiTripRole = "owner" | "editor" | "viewer";
+export type ApiTripStatus = "active" | "completed" | "archived";
 
 export type ApiTripMember = {
   userId: string;
   displayName: string;
   role: ApiTripRole;
+  active: boolean;
+  removedAt: string | null;
 };
 
 export type ApiTrip = {
@@ -48,6 +51,9 @@ export type ApiTrip = {
   title: string;
   currency: CurrencyCode;
   role: ApiTripRole;
+  status: ApiTripStatus;
+  completedAt: string | null;
+  archivedAt: string | null;
 };
 
 export type ApiExpenseSplit =
@@ -193,7 +199,7 @@ export type ApiMemberLocationAddress = {
   resolvedAt: string;
 };
 
-export type ApiMapMarkerKind = "ping" | "meetup" | "fuel" | "repair" | "warning";
+export type ApiMapMarkerKind = "ping" | "meetup" | "fuel" | "repair" | "warning" | "food" | "lodging";
 
 export type ApiMapMarker = {
   id: string;
@@ -205,6 +211,21 @@ export type ApiMapMarker = {
   latitude: number;
   longitude: number;
   createdAt: string;
+};
+
+export type ApiTripPoiKind = "food" | "lodging" | "fuel";
+
+export type ApiTripPoi = {
+  id: string;
+  name: string;
+  kind: ApiTripPoiKind;
+  latitude: number;
+  longitude: number;
+  distanceFromRouteKm: number;
+  source: "openstreetmap";
+  osmType: "node" | "way" | "relation";
+  osmId: number;
+  detail: string | null;
 };
 
 export type ApiPresenceUser = {
@@ -232,6 +253,8 @@ export type ApiTripLiveEvent = {
     | "route_plan_updated"
     | "message_created"
     | "map_marker_changed"
+    | "trip_changed"
+    | "trip_deleted"
     | "location_updated"
     | "location_stopped"
     | "presence_joined"
@@ -337,6 +360,30 @@ export async function createTrip(payload: { title: string; currency?: CurrencyCo
   return data.trip;
 }
 
+export async function updateTripStatus(targetTripId: string, status: ApiTripStatus): Promise<ApiTrip> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status }),
+  });
+  const data = await parseApiResponse<{ trip: ApiTrip }>(response);
+  return data.trip;
+}
+
+export async function deleteTrip(targetTripId: string): Promise<void> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}`, {
+    method: "DELETE",
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  await parseApiResponse(response);
+}
+
 export async function fetchExpenses(targetTripId = defaultTripId): Promise<ApiExpense[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/expenses`, {
     cache: "no-store",
@@ -375,6 +422,16 @@ export async function fetchTripMapMarkers(targetTripId = defaultTripId): Promise
   });
   const data = await parseApiResponse<{ markers: ApiMapMarker[] }>(response);
   return data.markers;
+}
+
+export async function fetchTripPois(targetTripId = defaultTripId, types: ApiTripPoiKind[] = ["food", "lodging", "fuel"]): Promise<ApiTripPoi[]> {
+  const params = new URLSearchParams();
+  params.set("types", types.join(","));
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/pois?${params.toString()}`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ pois: ApiTripPoi[] }>(response);
+  return data.pois;
 }
 
 export async function createTripMapMarker(

@@ -21,8 +21,33 @@ describe("trip repository", () => {
     assert.equal(trips.length, 1);
     assert.equal(trips[0]?.title, "Weekend Ride");
     assert.equal(trips[0]?.role, "owner");
+    assert.equal(trips[0]?.status, "active");
 
     await repository.unlinkUser(trip.id, "new-user");
     assert.equal((await repository.listForUser("new-user")).length, 0);
+  });
+
+  it("updates lifecycle status and deletes trips", async () => {
+    const repository = new InMemoryTripRepository();
+    const trip = await repository.create({
+      id: "finished-ride",
+      title: "Finished Ride",
+      currency: "VND",
+    });
+    await repository.linkUser(trip.id, "owner", "owner");
+
+    const completed = await repository.updateStatus(trip.id, "completed");
+    assert.equal(completed?.status, "completed");
+    assert.ok(completed?.completedAt);
+    assert.equal(completed?.archivedAt, null);
+
+    const archived = await repository.updateStatus(trip.id, "archived");
+    assert.equal(archived?.status, "archived");
+    assert.ok(archived?.completedAt);
+    assert.ok(archived?.archivedAt);
+
+    await repository.delete(trip.id);
+    assert.equal(await repository.findById(trip.id), null);
+    assert.equal((await repository.listForUser("owner")).length, 0);
   });
 });

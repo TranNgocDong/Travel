@@ -6,7 +6,7 @@ export class TripAccessService {
   constructor(private readonly memberRepository: TripMemberRepository) {}
 
   async getRole(tripId: string, userId: string): Promise<TripRole | null> {
-    const member = (await this.memberRepository.listByTrip(tripId)).find((item) => item.userId === userId);
+    const member = (await this.memberRepository.listByTrip(tripId)).find((item) => item.userId === userId && item.active);
     return member?.role ?? null;
   }
 }

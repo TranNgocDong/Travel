@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-export type TripMapMarkerKind = "ping" | "meetup" | "fuel" | "repair" | "warning";
+export type TripMapMarkerKind = "ping" | "meetup" | "fuel" | "repair" | "warning" | "food" | "lodging";
 
 export interface TripMapMarker {
   id: string;

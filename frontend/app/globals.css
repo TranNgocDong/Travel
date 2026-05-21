@@ -664,6 +664,7 @@ button {
 .route-map-panel,
 .next-stop-card,
 .group-location-card,
+.poi-card,
 .map-marker-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -879,6 +880,14 @@ button {
   background: #b7791f;
 }
 
+.map-marker-pin.food {
+  background: #16a34a;
+}
+
+.map-marker-pin.lodging {
+  background: #4f46e5;
+}
+
 .map-marker-pin.repair {
   background: #2563eb;
 }
@@ -949,6 +958,146 @@ button {
 .next-stop-card p {
   margin: 0;
   line-height: 1.4;
+}
+
+.poi-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.poi-card-head,
+.poi-row {
+  display: flex;
+  align-items: center;
+}
+
+.poi-card-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.poi-card-head strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.poi-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.poi-filter-grid button,
+.poi-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 900;
+  gap: 5px;
+  padding: 0 8px;
+}
+
+.poi-filter-grid button.active {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.poi-list {
+  display: grid;
+  gap: 7px;
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+.poi-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.poi-row {
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 7px;
+}
+
+.poi-row div {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+
+.poi-row strong,
+.poi-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poi-row strong {
+  font-size: 0.84rem;
+}
+
+.poi-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.poi-dot,
+.poi-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 950;
+}
+
+.poi-dot {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #16a34a;
+  font-size: 0.72rem;
+}
+
+.poi-dot.lodging,
+.poi-marker.lodging {
+  background: #4f46e5;
+}
+
+.poi-dot.fuel,
+.poi-marker.fuel {
+  background: #b7791f;
+}
+
+.poi-marker {
+  width: 28px !important;
+  height: 28px !important;
+  border: 2px solid #ffffff;
+  border-radius: 999px 999px 999px 4px;
+  background: #16a34a;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+  font-size: 0.72rem;
+  transform: rotate(-45deg);
+}
+
+.poi-marker span {
+  transform: rotate(45deg);
 }
 
 .group-location-card {
@@ -1284,6 +1433,14 @@ button {
   background: #b7791f;
 }
 
+.map-marker-dot.food {
+  background: #16a34a;
+}
+
+.map-marker-dot.lodging {
+  background: #4f46e5;
+}
+
 .map-marker-dot.repair {
   background: #2563eb;
 }
@@ -1419,6 +1576,164 @@ button {
 .stop-pill.recommended {
   background: var(--amber-soft);
   color: var(--amber);
+}
+
+.trip-lifecycle,
+.trip-recap-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 14px;
+}
+
+.trip-lifecycle {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.trip-lifecycle h2,
+.trip-lifecycle p,
+.trip-recap-panel p {
+  margin: 0;
+}
+
+.trip-lifecycle h2 {
+  margin-top: 2px;
+  font-size: 1.1rem;
+}
+
+.trip-lifecycle p {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.trip-lifecycle.completed {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+}
+
+.trip-lifecycle.archived {
+  opacity: 0.92;
+}
+
+.trip-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trip-lifecycle-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 900;
+  gap: 6px;
+  padding: 0 11px;
+}
+
+.trip-lifecycle-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.trip-lifecycle-actions .danger-action {
+  background: var(--danger);
+}
+
+.trip-lifecycle-note {
+  grid-column: 1 / -1;
+}
+
+.trip-recap-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.trip-recap-panel .panel-heading p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.recap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recap-grid div,
+.recap-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.recap-grid div {
+  padding: 10px;
+}
+
+.recap-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.recap-grid strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 1rem;
+}
+
+.recap-columns {
+  display: grid;
+  gap: 10px;
+}
+
+.recap-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+}
+
+.recap-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.recap-card p {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.recap-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.recap-line span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recap-line strong {
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .workspace {
@@ -2411,6 +2726,41 @@ button {
   gap: 7px;
 }
 
+.former-member-list {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.former-member-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  opacity: 0.72;
+  padding: 7px;
+}
+
+.former-member-row span,
+.former-member-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.former-member-row span {
+  font-weight: 850;
+}
+
+.former-member-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .trip-member-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 88px 38px;
@@ -2479,11 +2829,17 @@ button {
 @media (max-width: 719px) {
   .app-shell[data-active-tab="route"] .workspace,
   .app-shell[data-active-tab="route"] .expense-list,
+  .app-shell[data-active-tab="route"] .trip-recap-panel,
   .app-shell[data-active-tab="expenses"] .route-intel,
   .app-shell[data-active-tab="expenses"] .group-stack,
+  .app-shell[data-active-tab="expenses"] .trip-recap-panel,
   .app-shell[data-active-tab="group"] .route-intel,
   .app-shell[data-active-tab="group"] .expense-panel,
-  .app-shell[data-active-tab="group"] .expense-list {
+  .app-shell[data-active-tab="group"] .expense-list,
+  .app-shell[data-active-tab="group"] .trip-recap-panel,
+  .app-shell[data-active-tab="recap"] .route-intel,
+  .app-shell[data-active-tab="recap"] .workspace,
+  .app-shell[data-active-tab="recap"] .expense-list {
     display: none;
   }
 
@@ -2511,6 +2867,16 @@ button {
   }
 
   .summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .trip-lifecycle {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .recap-grid,
+  .recap-columns {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 

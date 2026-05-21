@@ -6,6 +6,8 @@ export interface TripMember {
   userId: string;
   displayName: string;
   role: TripRole;
+  active: boolean;
+  removedAt: string | null;
 }
 
 export interface TripMemberRepository {
@@ -25,12 +27,32 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
   async add(tripId: string, member: TripMember): Promise<TripMember> {
     const current = this.membersByTrip.get(tripId) ?? [];
 
-    if (current.some((item) => item.userId === member.userId)) {
-      throw new Error("DUPLICATE_MEMBER");
+    const existingIndex = current.findIndex((item) => item.userId === member.userId);
+
+    if (existingIndex >= 0) {
+      const existing = current[existingIndex]!;
+
+      if (existing.active) {
+        throw new Error("DUPLICATE_MEMBER");
+      }
+
+      const reactivated = {
+        ...member,
+        active: true,
+        removedAt: null,
+      };
+      current[existingIndex] = reactivated;
+      this.membersByTrip.set(tripId, current);
+      return reactivated;
     }
 
-    this.membersByTrip.set(tripId, [...current, member]);
-    return member;
+    const activeMember = {
+      ...member,
+      active: true,
+      removedAt: null,
+    };
+    this.membersByTrip.set(tripId, [...current, activeMember]);
+    return activeMember;
   }
 
   async update(tripId: string, userId: string, patch: { displayName?: string; role?: TripRole }): Promise<TripMember | null> {
@@ -55,10 +77,8 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
 
   async remove(tripId: string, userId: string): Promise<void> {
     const current = this.membersByTrip.get(tripId) ?? [];
-    this.membersByTrip.set(
-      tripId,
-      current.filter((member) => member.userId !== userId),
-    );
+    const now = new Date().toISOString();
+    this.membersByTrip.set(tripId, current.map((member) => (member.userId === userId ? { ...member, active: false, removedAt: now } : member)));
   }
 }
 
@@ -68,10 +88,10 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
   async listByTrip(tripId: string): Promise<TripMember[]> {
     const result = await this.pool.query<MemberRow>(
       `
-        SELECT user_id, display_name, role
+        SELECT user_id, display_name, role, removed_at
         FROM trip_participants
         WHERE trip_id = $1
-        ORDER BY created_at ASC, display_name ASC
+        ORDER BY removed_at ASC NULLS FIRST, created_at ASC, display_name ASC
       `,
       [tripId],
     );
@@ -80,23 +100,20 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
   }
 
   async add(tripId: string, member: TripMember): Promise<TripMember> {
-    try {
-      await this.pool.query(
-        `
-          INSERT INTO trip_participants (trip_id, user_id, display_name, role)
-          VALUES ($1, $2, $3, $4)
-        `,
-        [tripId, member.userId, member.displayName, member.role],
-      );
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new Error("DUPLICATE_MEMBER");
-      }
+    const result = await this.pool.query<MemberRow>(
+      `
+        INSERT INTO trip_participants (trip_id, user_id, display_name, role)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (trip_id, user_id) DO UPDATE
+        SET display_name = EXCLUDED.display_name,
+            role = EXCLUDED.role,
+            removed_at = NULL
+        RETURNING user_id, display_name, role, removed_at
+      `,
+      [tripId, member.userId, member.displayName, member.role],
+    );
 
-      throw error;
-    }
-
-    return member;
+    return rowToMember(result.rows[0]!);
   }
 
   async update(tripId: string, userId: string, patch: { displayName?: string; role?: TripRole }): Promise<TripMember | null> {
@@ -106,7 +123,7 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
         SET display_name = COALESCE($3, display_name),
             role = COALESCE($4, role)
         WHERE trip_id = $1 AND user_id = $2
-        RETURNING user_id, display_name, role
+        RETURNING user_id, display_name, role, removed_at
       `,
       [tripId, userId, patch.displayName ?? null, patch.role ?? null],
     );
@@ -115,7 +132,7 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
   }
 
   async remove(tripId: string, userId: string): Promise<void> {
-    await this.pool.query("DELETE FROM trip_participants WHERE trip_id = $1 AND user_id = $2", [tripId, userId]);
+    await this.pool.query("UPDATE trip_participants SET removed_at = now() WHERE trip_id = $1 AND user_id = $2", [tripId, userId]);
   }
 }
 
@@ -123,6 +140,7 @@ interface MemberRow {
   user_id: string;
   display_name: string;
   role: string;
+  removed_at: Date | string | null;
 }
 
 function rowToMember(row: MemberRow): TripMember {
@@ -130,9 +148,7 @@ function rowToMember(row: MemberRow): TripMember {
     userId: row.user_id,
     displayName: row.display_name,
     role: row.role === "owner" || row.role === "viewer" ? row.role : "editor",
+    active: row.removed_at === null,
+    removedAt: row.removed_at instanceof Date ? row.removed_at.toISOString() : row.removed_at ? new Date(row.removed_at).toISOString() : null,
   };
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "23505";
 }

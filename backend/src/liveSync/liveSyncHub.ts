@@ -4,6 +4,8 @@ export type LiveSyncEventType =
   | "route_plan_updated"
   | "message_created"
   | "map_marker_changed"
+  | "trip_changed"
+  | "trip_deleted"
   | "location_updated"
   | "location_stopped"
   | "presence_joined"

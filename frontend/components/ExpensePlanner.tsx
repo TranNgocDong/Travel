@@ -3,6 +3,8 @@
 import {
   ArrowRightLeft,
   AlertTriangle,
+  Archive,
+  BedDouble,
   Bike,
   Calculator,
   Check,
@@ -19,6 +21,7 @@ import {
   Plus,
   ReceiptText,
   RefreshCw,
+  RotateCcw,
   Send,
   ShieldCheck,
   Sun,
@@ -35,6 +38,7 @@ import {
   createTripMapMarker,
   createTrip,
   defaultTripId,
+  deleteTrip,
   deleteTripMapMarker,
   fetchExpenses,
   fetchMemberLocationAddress,
@@ -43,6 +47,7 @@ import {
   fetchTripMessages,
   fetchTripLocations,
   fetchTripMapMarkers,
+  fetchTripPois,
   fetchTripPresence,
   fetchSettlementResult,
   fetchTripMembers,
@@ -56,6 +61,7 @@ import {
   subscribeToTripEvents,
   stopSharingMyLocation,
   updateTripMember,
+  updateTripStatus,
   type ApiBalance,
   type ApiCreateExpensePayload,
   type ApiExpense,
@@ -71,19 +77,24 @@ import {
   type ApiRouteWaypoint,
   type ApiSettlement,
   type ApiTrip,
+  type ApiTripPoi,
+  type ApiTripPoiKind,
   type ApiTripLiveEvent,
   type ApiTripMember,
   type ApiTripMessage,
   type ApiTripRole,
+  type ApiTripStatus,
   type ApiUser,
 } from "@/lib/api";
 import { currencyRatesToVnd, formatMoney, type CurrencyCode, type Member, type SplitMode, toVnd } from "@/lib/settlements";
 
 type TripMemberView = Member & {
   role: ApiTripRole;
+  active: boolean;
+  removedAt: string | null;
 };
 
-type MobileTab = "route" | "expenses" | "group";
+type MobileTab = "route" | "expenses" | "group" | "recap";
 
 type OfflineExpenseQueueItem = {
   id: string;
@@ -114,8 +125,16 @@ const mapMarkerKinds: Array<{ id: ApiMapMarkerKind; label: string; icon: typeof 
   { id: "ping", label: "Ping", icon: MapPin },
   { id: "meetup", label: "Hẹn gặp", icon: Users },
   { id: "fuel", label: "Đổ xăng", icon: Fuel },
+  { id: "food", label: "Quán ăn", icon: ReceiptText },
+  { id: "lodging", label: "Ngủ nghỉ", icon: BedDouble },
   { id: "repair", label: "Sửa xe", icon: Bike },
   { id: "warning", label: "Cảnh báo", icon: AlertTriangle },
+];
+
+const poiFilters: Array<{ id: ApiTripPoiKind; label: string; icon: typeof MapPin }> = [
+  { id: "food", label: "Quán ăn", icon: ReceiptText },
+  { id: "lodging", label: "Khách sạn", icon: BedDouble },
+  { id: "fuel", label: "Cây xăng", icon: Fuel },
 ];
 
 const locationShareIntervalMs = 15_000;
@@ -130,6 +149,8 @@ export function ExpensePlanner() {
   const [balances, setBalances] = useState<ApiBalance[]>([]);
   const [settlements, setSettlements] = useState<ApiSettlement[]>([]);
   const [mapMarkers, setMapMarkers] = useState<ApiMapMarker[]>([]);
+  const [tripPois, setTripPois] = useState<ApiTripPoi[]>([]);
+  const [selectedPoiKinds, setSelectedPoiKinds] = useState<ApiTripPoiKind[]>(["food", "lodging", "fuel"]);
   const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
   const [presenceUsers, setPresenceUsers] = useState<ApiPresenceUser[]>([]);
   const [presenceNotice, setPresenceNotice] = useState<PresenceNotice | null>(null);
@@ -173,6 +194,9 @@ export function ExpensePlanner() {
   const [isSyncingExpenses, setIsSyncingExpenses] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
   const [isPlanningRoute, setIsPlanningRoute] = useState(false);
+  const [isLoadingPois, setIsLoadingPois] = useState(false);
+  const [isUpdatingTripStatus, setIsUpdatingTripStatus] = useState(false);
+  const [isDeletingTrip, setIsDeletingTrip] = useState(false);
   const [isUsingCurrentLocation, setIsUsingCurrentLocation] = useState(false);
   const [isSharingLocation, setIsSharingLocation] = useState(false);
   const [locationShareStatus, setLocationShareStatus] = useState<LocationShareStatus>("idle");
@@ -239,6 +263,7 @@ export function ExpensePlanner() {
         setBalances([]);
         setSettlements([]);
         setMapMarkers([]);
+        setTripPois([]);
         setMemberLocations([]);
         setPresenceUsers([]);
         setChatMessages([]);
@@ -267,12 +292,12 @@ export function ExpensePlanner() {
         fetchTripMapMarkers(selectedTripId).catch(() => []),
       ]);
       const mappedMembers = nextMembers.map(mapTripMember);
-      const memberIds = mappedMembers.map((member) => member.id);
+      const activeMemberIds = mappedMembers.filter((member) => member.active).map((member) => member.id);
       setMembers(mappedMembers);
-      setPayerId((current) => (current && memberIds.includes(current) ? current : (memberIds[0] ?? "")));
+      setPayerId((current) => (current && activeMemberIds.includes(current) ? current : (activeMemberIds[0] ?? "")));
       setParticipantIds((current) => {
-        const valid = current.filter((id) => memberIds.includes(id));
-        return valid.length ? valid : memberIds;
+        const valid = current.filter((id) => activeMemberIds.includes(id));
+        return valid.length ? valid : activeMemberIds;
       });
       setExpenses(nextExpenses);
       setBalances(result.balances);
@@ -309,6 +334,23 @@ export function ExpensePlanner() {
       }
     }
   }, [selectedTripId]);
+
+  const loadTripPois = useCallback(async (targetTripId = selectedTripId, kinds = selectedPoiKinds) => {
+    if (!targetTripId || !kinds.length) {
+      setTripPois([]);
+      return;
+    }
+
+    setIsLoadingPois(true);
+
+    try {
+      setTripPois(await fetchTripPois(targetTripId, kinds));
+    } catch {
+      setTripPois([]);
+    } finally {
+      setIsLoadingPois(false);
+    }
+  }, [selectedPoiKinds, selectedTripId]);
 
   const loadTripLocations = useCallback(async (targetTripId = selectedTripId) => {
     try {
@@ -476,7 +518,8 @@ export function ExpensePlanner() {
     () => expenses.reduce((sum, expense) => sum + toVnd(Number(expense.money.amount), expense.money.currency), 0),
     [expenses],
   );
-  const currentTripRole = members.find((member) => member.id === currentUser?.id)?.role ?? "viewer";
+  const activeMembers = useMemo(() => members.filter((member) => member.active), [members]);
+  const currentTripRole = activeMembers.find((member) => member.id === currentUser?.id)?.role ?? "viewer";
   const canManageTripMembers = currentTripRole === "owner";
   const activeTrip = trips.find((trip) => trip.id === selectedTripId);
   const syncStatusValue = queuedExpenseCount
@@ -494,6 +537,15 @@ export function ExpensePlanner() {
             : offlineReady
               ? "Đã lưu"
               : "Chưa lưu";
+
+  useEffect(() => {
+    if (!currentUser || !activeTrip?.id || !routePlan || routePlan.totalDistanceKm <= 0) {
+      setTripPois([]);
+      return;
+    }
+
+    void loadTripPois(activeTrip.id, selectedPoiKinds);
+  }, [activeTrip?.id, currentUser, loadTripPois, routePlan?.generatedAt, routePlan?.totalDistanceKm, selectedPoiKinds]);
 
   useEffect(() => {
     if (!currentUser || !activeTrip?.id) {
@@ -555,6 +607,11 @@ export function ExpensePlanner() {
 
         if (event.type === "map_marker_changed") {
           void loadTripMapMarkers(activeTrip.id);
+          return;
+        }
+
+        if (event.type === "trip_changed" || event.type === "trip_deleted") {
+          void loadTripData({ silent: true });
           return;
         }
 
@@ -783,7 +840,18 @@ export function ExpensePlanner() {
 
     const parsedAmount = Number(amount);
 
-    if (!title.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || participantIds.length === 0 || isSaving) {
+    const activeMemberIds = new Set(activeMembers.map((member) => member.id));
+
+    if (
+      !title.trim() ||
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0 ||
+      participantIds.length === 0 ||
+      !payerId ||
+      !activeMemberIds.has(payerId) ||
+      participantIds.some((id) => !activeMemberIds.has(id)) ||
+      isSaving
+    ) {
       return;
     }
 
@@ -1093,6 +1161,135 @@ export function ExpensePlanner() {
     }
   }
 
+  function handleTogglePoiKind(kind: ApiTripPoiKind) {
+    setSelectedPoiKinds((current) => {
+      if (current.includes(kind)) {
+        return current.length === 1 ? current : current.filter((item) => item !== kind);
+      }
+
+      return [...current, kind];
+    });
+  }
+
+  async function handlePlanRouteToPoi(poi: ApiTripPoi) {
+    if (isPlanningRoute || isUsingCurrentLocation) {
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setApiError("Trình duyệt không lấy được vị trí GPS");
+      return;
+    }
+
+    setIsUsingCurrentLocation(true);
+    setIsPlanningRoute(true);
+    setApiError(null);
+
+    try {
+      const position = await getCurrentBrowserPosition();
+      const originCoordinate = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      const destinationCoordinate = {
+        lat: poi.latitude,
+        lng: poi.longitude,
+      };
+
+      setRouteOrigin("Vị trí của tôi");
+      setRouteOriginCoordinate(originCoordinate);
+      setRouteDestination(poi.name);
+
+      const nextRoutePlan = await planRoute({
+        origin: "Vị trí của tôi",
+        destination: poi.name,
+        originCoordinate,
+        destinationCoordinate,
+      }, selectedTripId);
+      applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      setActiveTab("route");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới địa điểm này");
+    } finally {
+      setIsUsingCurrentLocation(false);
+      setIsPlanningRoute(false);
+    }
+  }
+
+  async function handleSavePoiAsMarker(poi: ApiTripPoi) {
+    if (isSavingMapMarker) {
+      return;
+    }
+
+    setIsSavingMapMarker(true);
+    setApiError(null);
+
+    try {
+      const marker = await createTripMapMarker({
+        label: poi.name,
+        kind: poi.kind,
+        latitude: poi.latitude,
+        longitude: poi.longitude,
+      }, selectedTripId);
+      setMapMarkers((current) => [marker, ...current.filter((item) => item.id !== marker.id)]);
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không lưu được địa điểm lên map");
+    } finally {
+      setIsSavingMapMarker(false);
+    }
+  }
+
+  async function handleUpdateTripStatus(status: ApiTripStatus) {
+    if (!activeTrip || isUpdatingTripStatus) {
+      return;
+    }
+
+    setIsUpdatingTripStatus(true);
+    setApiError(null);
+
+    try {
+      const trip = await updateTripStatus(activeTrip.id, status);
+      setTrips((current) => current.map((item) => (item.id === trip.id ? trip : item)));
+      setActiveTab(status === "completed" || status === "archived" ? "recap" : "route");
+      await loadTripData({ silent: true });
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không đổi được trạng thái chuyến đi");
+    } finally {
+      setIsUpdatingTripStatus(false);
+    }
+  }
+
+  async function handleDeleteTrip() {
+    if (!activeTrip || isDeletingTrip) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Xóa vĩnh viễn chuyến "${activeTrip.title}"? Toàn bộ chi phí, GPS, tin nhắn và điểm đánh dấu của chuyến này sẽ bị xóa.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingTrip(true);
+    setApiError(null);
+
+    try {
+      if (isSharingLocation) {
+        await handleStopSharingLocation();
+      }
+
+      await deleteTrip(activeTrip.id);
+      const remainingTrips = trips.filter((trip) => trip.id !== activeTrip.id);
+      setTrips(remainingTrips);
+      handleTripChange(remainingTrips[0]?.id ?? "");
+      await loadTripData({ silent: true });
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không xóa được chuyến đi");
+    } finally {
+      setIsDeletingTrip(false);
+    }
+  }
+
   function handleTripChange(nextTripId: string) {
     if (isSharingLocation) {
       void handleStopSharingLocation();
@@ -1108,6 +1305,7 @@ export function ExpensePlanner() {
     setSettlements([]);
     setMembers([]);
     setMapMarkers([]);
+    setTripPois([]);
     setMemberLocations([]);
     setPresenceUsers([]);
     setPresenceNotice(null);
@@ -1170,6 +1368,8 @@ export function ExpensePlanner() {
     setBalances([]);
     setSettlements([]);
     setMembers([]);
+    setMapMarkers([]);
+    setTripPois([]);
     setMemberLocations([]);
     setPresenceUsers([]);
     setPresenceNotice(null);
@@ -1256,7 +1456,7 @@ export function ExpensePlanner() {
           <select value={selectedTripId} onChange={(event) => handleTripChange(event.target.value)} disabled={!trips.length || isLoading}>
             {trips.map((trip) => (
               <option key={trip.id} value={trip.id}>
-                {trip.title}
+                {trip.title}{trip.status === "active" ? "" : ` - ${tripStatusLabel(trip.status)}`}
               </option>
             ))}
           </select>
@@ -1317,6 +1517,10 @@ export function ExpensePlanner() {
           <Users size={17} />
           <span>Nhóm</span>
         </button>
+        <button className={tabButtonClass(activeTab, "recap")} type="button" onClick={() => setActiveTab("recap")}>
+          <Archive size={17} />
+          <span>Tổng kết</span>
+        </button>
       </nav>
 
       {apiError && (
@@ -1365,6 +1569,32 @@ export function ExpensePlanner() {
         </div>
       )}
 
+      {activeTrip && trips.length > 0 && (
+        <TripLifecyclePanel
+          canManage={canManageTripMembers}
+          expenses={expenses}
+          isDeleting={isDeletingTrip}
+          isUpdating={isUpdatingTripStatus}
+          onDelete={handleDeleteTrip}
+          onStatusChange={handleUpdateTripStatus}
+          routePlan={routePlan}
+          trip={activeTrip}
+        />
+      )}
+
+      {activeTrip && trips.length > 0 && (activeTrip.status !== "active" || activeTab === "recap") && (
+        <TripRecapPanel
+          balances={balances}
+          expenses={expenses}
+          mapMarkers={mapMarkers}
+          members={members}
+          pois={tripPois}
+          routePlan={routePlan}
+          settlements={settlements}
+          trip={activeTrip}
+        />
+      )}
+
       {!trips.length && !isLoading && (
         <section className="empty-state" aria-label="Bắt đầu chuyến đi">
           <Map size={24} />
@@ -1390,6 +1620,9 @@ export function ExpensePlanner() {
           mapMarkerLabel={mapMarkerLabel}
           mapMarkers={mapMarkers}
           memberLocations={memberLocations}
+          pois={tripPois}
+          poiKinds={selectedPoiKinds}
+          isLoadingPois={isLoadingPois}
           onCreateMapMarker={handleCreateMapMarker}
           onDeleteMapMarker={handleDeleteMapMarker}
           onDestinationChange={handleRouteDestinationChange}
@@ -1397,12 +1630,15 @@ export function ExpensePlanner() {
           onMapMarkerLabelChange={setMapMarkerLabel}
           onMapMarkerPointSelected={handleMapMarkerPointSelected}
           onOriginChange={handleRouteOriginChange}
+          onPlanRouteToPoi={handlePlanRouteToPoi}
           onPlanRoute={handlePlanRoute}
           onPlanRouteFromCurrentLocation={handlePlanRouteFromCurrentLocation}
           onPlanRouteToMapMarker={handlePlanRouteToMapMarker}
           onPlanRouteToMember={handlePlanRouteToMember}
+          onSavePoiAsMarker={handleSavePoiAsMarker}
           onStartSharingLocation={handleStartSharingLocation}
           onStopSharingLocation={handleStopSharingLocation}
+          onTogglePoiKind={handleTogglePoiKind}
           onToggleMapMarkerPlacement={handleToggleMapMarkerPlacement}
           origin={routeOrigin}
           originCoordinate={routeOriginCoordinate}
@@ -1421,7 +1657,7 @@ export function ExpensePlanner() {
               <span className="eyebrow">Khoản mới</span>
               <h2>Ghi chi phí</h2>
             </div>
-            <button className="primary-icon" type="submit" title="Lưu chi phí" aria-label="Lưu chi phí" disabled={isSaving || !members.length}>
+            <button className="primary-icon" type="submit" title="Lưu chi phí" aria-label="Lưu chi phí" disabled={isSaving || !activeMembers.length}>
               <Plus size={20} />
             </button>
           </div>
@@ -1473,7 +1709,7 @@ export function ExpensePlanner() {
             <label className="field">
               <span>Người trả</span>
               <select value={payerId} onChange={(event) => setPayerId(event.target.value)}>
-                {members.map((member) => (
+                {activeMembers.map((member) => (
                   <option key={member.id} value={member.id}>
                     {member.name}
                   </option>
@@ -1491,7 +1727,7 @@ export function ExpensePlanner() {
           </div>
 
           <div className="member-grid" aria-label="Người tham gia">
-            {members.map((member) => {
+            {activeMembers.map((member) => {
               const active = participantIds.includes(member.id);
 
               return (
@@ -1607,6 +1843,180 @@ export function ExpensePlanner() {
         />
       )}
     </main>
+  );
+}
+
+function TripLifecyclePanel({
+  canManage,
+  expenses,
+  isDeleting,
+  isUpdating,
+  onDelete,
+  onStatusChange,
+  routePlan,
+  trip,
+}: {
+  canManage: boolean;
+  expenses: ApiExpense[];
+  isDeleting: boolean;
+  isUpdating: boolean;
+  onDelete: () => void;
+  onStatusChange: (status: ApiTripStatus) => void;
+  routePlan: ApiRoutePlan | null;
+  trip: ApiTrip;
+}) {
+  const total = expenses.reduce((sum, expense) => sum + toVnd(Number(expense.money.amount), expense.money.currency), 0);
+
+  return (
+    <section className={`trip-lifecycle ${trip.status}`} aria-label="Trạng thái chuyến đi">
+      <div>
+        <span className="eyebrow">Vòng đời chuyến đi</span>
+        <h2>{tripStatusLabel(trip.status)}</h2>
+        <p>
+          {routePlan?.totalDistanceKm ?? 0} km · {expenses.length} khoản · {formatMoney(total)}
+        </p>
+      </div>
+
+      <div className="trip-lifecycle-actions">
+        {trip.status === "active" && (
+          <button type="button" disabled={!canManage || isUpdating} onClick={() => onStatusChange("completed")}>
+            <Check size={16} />
+            <span>{isUpdating ? "Đang kết thúc" : "Kết thúc"}</span>
+          </button>
+        )}
+        {trip.status === "completed" && (
+          <>
+            <button type="button" disabled={!canManage || isUpdating} onClick={() => onStatusChange("archived")}>
+              <Archive size={16} />
+              <span>Lưu trữ</span>
+            </button>
+            <button type="button" disabled={!canManage || isUpdating} onClick={() => onStatusChange("active")}>
+              <RotateCcw size={16} />
+              <span>Mở lại</span>
+            </button>
+          </>
+        )}
+        {trip.status === "archived" && (
+          <button type="button" disabled={!canManage || isUpdating} onClick={() => onStatusChange("active")}>
+            <RotateCcw size={16} />
+            <span>Mở lại</span>
+          </button>
+        )}
+        {trip.status !== "active" && (
+          <button className="danger-action" type="button" disabled={!canManage || isDeleting} onClick={onDelete}>
+            <Trash2 size={16} />
+            <span>{isDeleting ? "Đang xóa" : "Xóa chuyến"}</span>
+          </button>
+        )}
+      </div>
+
+      {!canManage && <p className="trip-lifecycle-note">Chỉ chủ phòng mới được kết thúc, lưu trữ hoặc xóa chuyến.</p>}
+    </section>
+  );
+}
+
+function TripRecapPanel({
+  balances,
+  expenses,
+  mapMarkers,
+  members,
+  pois,
+  routePlan,
+  settlements,
+  trip,
+}: {
+  balances: ApiBalance[];
+  expenses: ApiExpense[];
+  mapMarkers: ApiMapMarker[];
+  members: TripMemberView[];
+  pois: ApiTripPoi[];
+  routePlan: ApiRoutePlan | null;
+  settlements: ApiSettlement[];
+  trip: ApiTrip;
+}) {
+  const total = expenses.reduce((sum, expense) => sum + toVnd(Number(expense.money.amount), expense.money.currency), 0);
+  const topCategories = summarizeExpensesByCategory(expenses).slice(0, 4);
+  const markerSummary = summarizeMapMarkers(mapMarkers);
+  const weatherAlerts = routePlan?.waypoints.filter((waypoint) => waypoint.weather.riskLevel !== "low") ?? [];
+
+  return (
+    <section className="trip-recap-panel" aria-label="Tổng kết chuyến đi">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Tổng kết sau chuyến</span>
+          <h2>{trip.title}</h2>
+          <p>{trip.completedAt ? `Kết thúc lúc ${formatDateTime(trip.completedAt)}` : "Bản tổng kết sẽ đầy đủ hơn khi bạn bấm Kết thúc."}</p>
+        </div>
+        <Archive size={22} />
+      </div>
+
+      <div className="recap-grid">
+        <MiniMetric label="Tổng đường" value={`${routePlan?.totalDistanceKm ?? 0} km`} />
+        <MiniMetric label="Thời gian chạy" value={formatDuration(routePlan?.durationMinutes ?? 0)} />
+        <MiniMetric label="Tổng chi" value={formatMoney(total)} />
+        <MiniMetric label="Thành viên đang đi" value={`${members.filter((member) => member.active).length}`} />
+      </div>
+
+      <div className="recap-columns">
+        <div className="recap-card">
+          <h3>Chi phí theo nhóm</h3>
+          {topCategories.length ? (
+            topCategories.map((item) => (
+              <div className="recap-line" key={item.category}>
+                <span>{expenseCategoryLabel(item.category)}</span>
+                <strong>{formatMoney(item.total)}</strong>
+              </div>
+            ))
+          ) : (
+            <p>Chưa có chi phí.</p>
+          )}
+        </div>
+
+        <div className="recap-card">
+          <h3>Ai trả ai</h3>
+          {settlements.length ? (
+            settlements.map((settlement, index) => (
+              <div className="recap-line" key={`${settlement.fromUserId}-${settlement.toUserId}-${index}`}>
+                <span>
+                  {findMember(members, settlement.fromUserId).name} → {findMember(members, settlement.toUserId).name}
+                </span>
+                <strong>{formatMoney(Number(settlement.amountMinor), settlement.currency)}</strong>
+              </div>
+            ))
+          ) : balances.length ? (
+            <p>Không còn khoản cần chuyển.</p>
+          ) : (
+            <p>Chưa có dữ liệu chia tiền.</p>
+          )}
+        </div>
+
+        <div className="recap-card">
+          <h3>Địa điểm đã lưu</h3>
+          {markerSummary.length ? (
+            markerSummary.map((item) => (
+              <div className="recap-line" key={item.kind}>
+                <span>{mapMarkerKindLabel(item.kind)}</span>
+                <strong>{item.count}</strong>
+              </div>
+            ))
+          ) : (
+            <p>Chưa lưu điểm nào trên map.</p>
+          )}
+        </div>
+
+        <div className="recap-card">
+          <h3>Thời tiết & tiện ích</h3>
+          <div className="recap-line">
+            <span>Cảnh báo thời tiết</span>
+            <strong>{weatherAlerts.length}</strong>
+          </div>
+          <div className="recap-line">
+            <span>Quán ăn/chỗ nghỉ/cây xăng gần tuyến</span>
+            <strong>{pois.length}</strong>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1873,6 +2283,9 @@ function MemberManagerPanel({
   onRemoveMember: (memberId: string) => void;
   onRoleChange: (memberId: string, role: ApiTripRole) => void;
 }) {
+  const activeMembers = members.filter((member) => member.active);
+  const removedMembers = members.filter((member) => !member.active);
+
   return (
     <section className="member-manager-panel" aria-label="Quản lý thành viên">
       <div className="panel-heading">
@@ -1907,7 +2320,7 @@ function MemberManagerPanel({
       </form>
 
       <div className="trip-member-list">
-        {members.map((member) => (
+        {activeMembers.map((member) => (
           <div className="trip-member-row" key={member.id}>
             <Avatar member={member} />
             <span>{member.name}</span>
@@ -1932,6 +2345,19 @@ function MemberManagerPanel({
           </div>
         ))}
       </div>
+
+      {removedMembers.length > 0 && (
+        <div className="former-member-list">
+          <span className="eyebrow">Đã xóa khỏi phòng</span>
+          {removedMembers.map((member) => (
+            <div className="former-member-row" key={member.id}>
+              <Avatar member={member} />
+              <span>{member.name}</span>
+              <small>{member.removedAt ? formatDateTime(member.removedAt) : "Đã rời phòng"}</small>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1951,6 +2377,9 @@ function RouteIntelligence({
   mapMarkerLabel,
   mapMarkers,
   memberLocations,
+  pois,
+  poiKinds,
+  isLoadingPois,
   onCreateMapMarker,
   onDeleteMapMarker,
   onDestinationChange,
@@ -1958,12 +2387,15 @@ function RouteIntelligence({
   onMapMarkerLabelChange,
   onMapMarkerPointSelected,
   onOriginChange,
+  onPlanRouteToPoi,
   onPlanRoute,
   onPlanRouteFromCurrentLocation,
   onPlanRouteToMapMarker,
   onPlanRouteToMember,
+  onSavePoiAsMarker,
   onStartSharingLocation,
   onStopSharingLocation,
+  onTogglePoiKind,
   onToggleMapMarkerPlacement,
   origin,
   originCoordinate,
@@ -1984,6 +2416,9 @@ function RouteIntelligence({
   mapMarkerLabel: string;
   mapMarkers: ApiMapMarker[];
   memberLocations: ApiMemberLocation[];
+  pois: ApiTripPoi[];
+  poiKinds: ApiTripPoiKind[];
+  isLoadingPois: boolean;
   onCreateMapMarker: (event: FormEvent<HTMLFormElement>) => void;
   onDeleteMapMarker: (marker: ApiMapMarker) => void;
   onDestinationChange: (value: string) => void;
@@ -1991,12 +2426,15 @@ function RouteIntelligence({
   onMapMarkerLabelChange: (value: string) => void;
   onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
   onOriginChange: (value: string) => void;
+  onPlanRouteToPoi: (poi: ApiTripPoi) => void;
   onPlanRoute: (event: FormEvent<HTMLFormElement>) => void;
   onPlanRouteFromCurrentLocation: () => void;
   onPlanRouteToMapMarker: (marker: ApiMapMarker) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
+  onSavePoiAsMarker: (poi: ApiTripPoi) => void;
   onStartSharingLocation: () => void;
   onStopSharingLocation: () => void;
+  onTogglePoiKind: (kind: ApiTripPoiKind) => void;
   onToggleMapMarkerPlacement: () => void;
   origin: string;
   originCoordinate: ApiGeoPoint | null;
@@ -2045,6 +2483,7 @@ function RouteIntelligence({
             memberLocations={memberLocations}
             onMapMarkerPointSelected={onMapMarkerPointSelected}
             onPlanRouteToMember={onPlanRouteToMember}
+            pois={pois}
             routePlan={routePlan}
           />
           <div className="route-map-head">
@@ -2065,6 +2504,58 @@ function RouteIntelligence({
             <span className="eyebrow">Cần chú ý tiếp theo</span>
             <strong>{routePlan.summary.nextCriticalStop ?? "Không có cảnh báo"}</strong>
             <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chặng hiện tại ổn định."}</p>
+          </div>
+
+          <div className="poi-card">
+            <div className="poi-card-head">
+              <div>
+                <span className="eyebrow">Tiện ích trên đường</span>
+                <strong>{isLoadingPois ? "Đang tìm..." : `${pois.length} địa điểm gần tuyến`}</strong>
+              </div>
+              <MapPin size={18} />
+            </div>
+
+            <div className="poi-filter-grid" aria-label="Lọc địa điểm trên map">
+              {poiFilters.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <button
+                    key={item.id}
+                    className={poiKinds.includes(item.id) ? "active" : ""}
+                    type="button"
+                    onClick={() => onTogglePoiKind(item.id)}
+                  >
+                    <Icon size={14} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="poi-list">
+              {pois.length ? (
+                pois.slice(0, 7).map((poi) => (
+                  <div className="poi-row" key={poi.id}>
+                    <span className={`poi-dot ${poi.kind}`}>{poiSymbol(poi.kind)}</span>
+                    <div>
+                      <strong>{poi.name}</strong>
+                      <small>
+                        {poiKindLabel(poi.kind)} · cách tuyến {poi.distanceFromRouteKm} km
+                      </small>
+                    </div>
+                    <button type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={() => onPlanRouteToPoi(poi)}>
+                      Tới
+                    </button>
+                    <button type="button" disabled={isSavingMapMarker} onClick={() => onSavePoiAsMarker(poi)}>
+                      Lưu
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p>{isLoadingPois ? "Đang lấy địa điểm từ OpenStreetMap." : "Chưa có quán ăn, chỗ nghỉ hoặc cây xăng gần tuyến này."}</p>
+              )}
+            </div>
           </div>
 
           <div className="group-location-card">
@@ -2191,6 +2682,7 @@ function OpenStreetRouteMap({
   memberLocations,
   onMapMarkerPointSelected,
   onPlanRouteToMember,
+  pois,
   routePlan,
 }: {
   currentUserId: string;
@@ -2200,6 +2692,7 @@ function OpenStreetRouteMap({
   memberLocations: ApiMemberLocation[];
   onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
+  pois: ApiTripPoi[];
   routePlan: ApiRoutePlan;
 }) {
   const mapElementRef = useRef<HTMLDivElement | null>(null);
@@ -2210,6 +2703,7 @@ function OpenStreetRouteMap({
   const userAccuracyRef = useRef<import("leaflet").Circle | null>(null);
   const memberLocationLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const mapMarkerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const poiLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const [status, setStatus] = useState<LeafletMapStatus>("loading");
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationWatchStatus>("idle");
@@ -2229,6 +2723,11 @@ function OpenStreetRouteMap({
   const clearMapMarkerLayer = useCallback(() => {
     mapMarkerLayerRef.current?.remove();
     mapMarkerLayerRef.current = null;
+  }, []);
+
+  const clearPoiLayer = useCallback(() => {
+    poiLayerRef.current?.remove();
+    poiLayerRef.current = null;
   }, []);
 
   const updateUserPosition = useCallback(async (position: GeolocationPosition) => {
@@ -2429,6 +2928,56 @@ function OpenStreetRouteMap({
       }
 
       leafletModuleRef.current = leaflet;
+      clearPoiLayer();
+
+      if (!pois.length) {
+        return;
+      }
+
+      const layer = leaflet.layerGroup();
+
+      for (const poi of pois) {
+        const latLng = leaflet.latLng(poi.latitude, poi.longitude);
+        leaflet
+          .marker(latLng, {
+            icon: leaflet.divIcon({
+              className: `poi-marker ${poi.kind}`,
+              html: `<span>${escapeHtml(poiSymbol(poi.kind))}</span>`,
+              iconAnchor: [14, 28],
+              iconSize: [28, 28],
+            }),
+            title: poi.name,
+          })
+          .bindPopup(
+            `<strong>${escapeHtml(poi.name)}</strong><br />${escapeHtml(poiKindLabel(poi.kind))} - cách tuyến ${escapeHtml(String(poi.distanceFromRouteKm))} km`,
+          )
+          .addTo(layer);
+      }
+
+      layer.addTo(map);
+      poiLayerRef.current = layer;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearPoiLayer, pois, status]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (status !== "ready" || !map) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void import("leaflet").then((leaflet) => {
+      if (cancelled || !mapInstanceRef.current) {
+        return;
+      }
+
+      leafletModuleRef.current = leaflet;
       clearMapMarkerLayer();
 
       if (!mapMarkers.length) {
@@ -2506,6 +3055,7 @@ function OpenStreetRouteMap({
         clearUserLocationLayer();
         clearMemberLocationLayer();
         clearMapMarkerLayer();
+        clearPoiLayer();
         leafletModuleRef.current = leaflet;
 
         const latLngs = points.map((point) => leaflet.latLng(point.lat, point.lng));
@@ -2569,8 +3119,9 @@ function OpenStreetRouteMap({
       clearUserLocationLayer();
       clearMemberLocationLayer();
       clearMapMarkerLayer();
+      clearPoiLayer();
     };
-  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearUserLocationLayer, routePlan]);
+  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearPoiLayer, clearUserLocationLayer, routePlan]);
 
   useEffect(() => {
     return () => {
@@ -2736,6 +3287,14 @@ function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
     return "có tin nhắn mới";
   }
 
+  if (type === "trip_changed") {
+    return "chuyến đi vừa đổi trạng thái";
+  }
+
+  if (type === "trip_deleted") {
+    return "chuyến đi vừa bị xóa";
+  }
+
   if (type === "location_updated") {
     return "GPS nhóm vừa cập nhật";
   }
@@ -2792,6 +3351,8 @@ function mapTripMember(member: ApiTripMember): TripMemberView {
     name: member.displayName,
     initials: createInitials(member.displayName),
     role: member.role,
+    active: member.active !== false,
+    removedAt: member.removedAt ?? null,
   };
 }
 
@@ -2822,6 +3383,68 @@ function formatLocationTime(value: string): string {
   }).format(date);
 }
 
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "chưa rõ";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    dateStyle: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatDuration(minutes: number): string {
+  if (!minutes) {
+    return "0 giờ";
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.round(minutes % 60);
+  return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
+}
+
+function tripStatusLabel(status: ApiTripStatus): string {
+  if (status === "completed") {
+    return "Đã kết thúc";
+  }
+
+  if (status === "archived") {
+    return "Đã lưu trữ";
+  }
+
+  return "Đang đi";
+}
+
+function summarizeExpensesByCategory(expenses: ApiExpense[]): Array<{ category: string; total: number }> {
+  const totals = new globalThis.Map<string, number>();
+
+  for (const expense of expenses) {
+    totals.set(expense.category, (totals.get(expense.category) ?? 0) + toVnd(Number(expense.money.amount), expense.money.currency));
+  }
+
+  return [...totals.entries()]
+    .map(([category, total]) => ({ category, total }))
+    .sort((left, right) => right.total - left.total);
+}
+
+function summarizeMapMarkers(markers: ApiMapMarker[]): Array<{ kind: ApiMapMarkerKind; count: number }> {
+  const totals = new globalThis.Map<ApiMapMarkerKind, number>();
+
+  for (const marker of markers) {
+    totals.set(marker.kind, (totals.get(marker.kind) ?? 0) + 1);
+  }
+
+  return [...totals.entries()].map(([kind, count]) => ({ kind, count }));
+}
+
+function expenseCategoryLabel(category: string): string {
+  return categories.find((item) => item.id === category)?.label ?? category;
+}
+
 function mapMarkerKindLabel(kind: ApiMapMarkerKind): string {
   if (kind === "meetup") {
     return "Hẹn gặp";
@@ -2829,6 +3452,14 @@ function mapMarkerKindLabel(kind: ApiMapMarkerKind): string {
 
   if (kind === "fuel") {
     return "Đổ xăng";
+  }
+
+  if (kind === "food") {
+    return "Quán ăn";
+  }
+
+  if (kind === "lodging") {
+    return "Ngủ nghỉ";
   }
 
   if (kind === "repair") {
@@ -2851,6 +3482,14 @@ function mapMarkerSymbol(kind: ApiMapMarkerKind): string {
     return "X";
   }
 
+  if (kind === "food") {
+    return "A";
+  }
+
+  if (kind === "lodging") {
+    return "N";
+  }
+
   if (kind === "repair") {
     return "S";
   }
@@ -2860,6 +3499,30 @@ function mapMarkerSymbol(kind: ApiMapMarkerKind): string {
   }
 
   return "+";
+}
+
+function poiKindLabel(kind: ApiTripPoiKind): string {
+  if (kind === "fuel") {
+    return "Cây xăng";
+  }
+
+  if (kind === "lodging") {
+    return "Khách sạn/nhà trọ";
+  }
+
+  return "Quán ăn";
+}
+
+function poiSymbol(kind: ApiTripPoiKind): string {
+  if (kind === "fuel") {
+    return "X";
+  }
+
+  if (kind === "lodging") {
+    return "N";
+  }
+
+  return "A";
 }
 
 function escapeHtml(value: string): string {
