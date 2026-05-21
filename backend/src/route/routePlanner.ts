@@ -68,6 +68,12 @@ export interface RouteBuildInput {
   destinationCoordinate?: GeoPoint;
 }
 
+export interface ReverseGeocodeResult {
+  label: string;
+  address: string;
+  coordinate: GeoPoint;
+}
+
 export class RoutePlannerError extends Error {
   constructor(
     readonly code: "INVALID_ROUTE_INPUT" | "GEOCODE_NOT_FOUND" | "ROUTE_NOT_FOUND" | "ROUTE_PROVIDER_ERROR",
@@ -144,6 +150,33 @@ export async function buildOpenStreetRoutePlan(tripId: string, input: RouteBuild
     },
     summary: summarizeRoute(waypoints),
     waypoints,
+  };
+}
+
+export async function reverseGeocodePoint(coordinate: GeoPoint): Promise<ReverseGeocodeResult> {
+  if (!isValidGeoPoint(coordinate)) {
+    throw new RoutePlannerError("INVALID_ROUTE_INPUT", "Tọa độ không hợp lệ");
+  }
+
+  const baseUrl = process.env.NOMINATIM_BASE_URL ?? "https://nominatim.openstreetmap.org";
+  const url = new URL("/reverse", baseUrl);
+  url.searchParams.set("lat", String(coordinate.lat));
+  url.searchParams.set("lon", String(coordinate.lng));
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("accept-language", "vi,en");
+
+  const data = await fetchJson<NominatimReverseResult>(url, "GEOCODE_NOT_FOUND");
+  const address = data.display_name;
+
+  if (!address) {
+    throw new RoutePlannerError("GEOCODE_NOT_FOUND", "Không tìm thấy địa chỉ cho vị trí này");
+  }
+
+  return {
+    label: simplifyPlaceName(address),
+    address,
+    coordinate,
   };
 }
 
@@ -266,6 +299,10 @@ interface NominatimSearchResult {
     state?: string;
     country?: string;
   };
+}
+
+interface NominatimReverseResult {
+  display_name?: string;
 }
 
 interface OsrmRouteResponse {

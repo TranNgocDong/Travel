@@ -663,7 +663,8 @@ button {
 
 .route-map-panel,
 .next-stop-card,
-.group-location-card {
+.group-location-card,
+.map-marker-card {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
@@ -777,6 +778,10 @@ button {
   font: inherit;
 }
 
+.osm-map-shell.placing .leaflet-container {
+  cursor: crosshair;
+}
+
 .leaflet-control-attribution {
   font-size: 0.68rem;
 }
@@ -844,6 +849,42 @@ button {
 
 .member-location-marker span {
   transform: translateY(-0.5px);
+}
+
+.map-marker-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px !important;
+  height: 32px !important;
+  border: 2px solid #ffffff;
+  border-radius: 999px 999px 999px 4px;
+  background: #7c3aed;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.28);
+  color: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 950;
+  transform: rotate(-45deg);
+}
+
+.map-marker-pin span {
+  transform: rotate(45deg);
+}
+
+.map-marker-pin.meetup {
+  background: #0f766e;
+}
+
+.map-marker-pin.fuel {
+  background: #b7791f;
+}
+
+.map-marker-pin.repair {
+  background: #2563eb;
+}
+
+.map-marker-pin.warning {
+  background: #b42318;
 }
 
 .route-map-head {
@@ -1059,6 +1100,196 @@ button {
   font-weight: 900;
   padding: 5px 8px;
   white-space: nowrap;
+}
+
+.map-marker-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.map-marker-head,
+.map-marker-row {
+  display: flex;
+  align-items: center;
+}
+
+.map-marker-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.map-marker-head strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.map-pick-button,
+.map-marker-save,
+.map-marker-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 900;
+  gap: 5px;
+  padding: 0 9px;
+}
+
+.map-pick-button.active,
+.map-marker-save {
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.marker-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.marker-kind-grid button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 850;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.marker-kind-grid button.active {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.map-marker-card input {
+  min-height: 38px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.map-marker-card input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.marker-coordinate {
+  margin: 0;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 820;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
+.marker-coordinate.selected {
+  color: var(--accent-strong);
+}
+
+.map-marker-save {
+  width: 100%;
+}
+
+.map-marker-save:disabled,
+.map-marker-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.map-marker-list {
+  display: grid;
+  gap: 7px;
+}
+
+.map-marker-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.map-marker-row {
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 7px;
+}
+
+.map-marker-row div {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+
+.map-marker-row strong,
+.map-marker-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-marker-row strong {
+  font-size: 0.84rem;
+}
+
+.map-marker-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.map-marker-dot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.map-marker-dot.meetup {
+  background: #0f766e;
+}
+
+.map-marker-dot.fuel {
+  background: #b7791f;
+}
+
+.map-marker-dot.repair {
+  background: #2563eb;
+}
+
+.map-marker-dot.warning {
+  background: #b42318;
 }
 
 .waypoint-list {
@@ -1604,6 +1835,7 @@ button {
   gap: 8px;
 }
 
+.presence-item,
 .presence-row,
 .settlement-item,
 .balance-row,
@@ -1615,10 +1847,29 @@ button {
   background: var(--panel);
 }
 
+.presence-item {
+  gap: 0;
+  overflow: hidden;
+}
+
 .presence-row {
   grid-template-columns: auto minmax(0, 1fr) auto;
+  width: 100%;
+  min-width: 0;
+  border: 0;
   gap: 10px;
   padding: 10px;
+  color: var(--text);
+  text-align: left;
+}
+
+.presence-item.selected,
+.presence-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+}
+
+.presence-row:hover {
+  background: var(--panel-soft);
 }
 
 .presence-row div {
@@ -1648,7 +1899,50 @@ button {
 }
 
 .presence-row.self {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 48%, var(--panel));
+}
+
+.presence-actions {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+.presence-action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.presence-action-buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 850;
+  gap: 5px;
+  padding: 0 7px;
+}
+
+.presence-action-buttons button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.presence-actions p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .empty-panel-note,

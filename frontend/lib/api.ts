@@ -166,6 +166,30 @@ export type ApiMemberLocation = {
   expiresAt: string;
 };
 
+export type ApiMemberLocationAddress = {
+  userId: string;
+  displayName: string;
+  label: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  resolvedAt: string;
+};
+
+export type ApiMapMarkerKind = "ping" | "meetup" | "fuel" | "repair" | "warning";
+
+export type ApiMapMarker = {
+  id: string;
+  tripId: string;
+  userId: string;
+  displayName: string;
+  label: string;
+  kind: ApiMapMarkerKind;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+};
+
 export type ApiPresenceUser = {
   userId: string;
   displayName: string;
@@ -190,6 +214,7 @@ export type ApiTripLiveEvent = {
     | "member_changed"
     | "route_plan_updated"
     | "message_created"
+    | "map_marker_changed"
     | "location_updated"
     | "location_stopped"
     | "presence_joined"
@@ -287,6 +312,54 @@ export async function fetchTripLocations(targetTripId = defaultTripId): Promise<
   });
   const data = await parseApiResponse<{ locations: ApiMemberLocation[] }>(response);
   return data.locations;
+}
+
+export async function fetchMemberLocationAddress(memberId: string, targetTripId = defaultTripId): Promise<ApiMemberLocationAddress> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations/${memberId}/address`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ address: ApiMemberLocationAddress }>(response);
+  return data.address;
+}
+
+export async function fetchTripMapMarkers(targetTripId = defaultTripId): Promise<ApiMapMarker[]> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/map-markers`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ markers: ApiMapMarker[] }>(response);
+  return data.markers;
+}
+
+export async function createTripMapMarker(
+  payload: {
+    label: string;
+    kind: ApiMapMarkerKind;
+    latitude: number;
+    longitude: number;
+  },
+  targetTripId = defaultTripId,
+): Promise<ApiMapMarker> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/map-markers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse<{ marker: ApiMapMarker }>(response);
+  return data.marker;
+}
+
+export async function deleteTripMapMarker(markerId: string, targetTripId = defaultTripId): Promise<void> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/map-markers/${markerId}`, {
+    method: "DELETE",
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  await parseApiResponse(response);
 }
 
 export async function fetchTripPresence(targetTripId = defaultTripId): Promise<ApiPresenceUser[]> {

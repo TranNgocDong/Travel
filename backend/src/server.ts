@@ -19,8 +19,14 @@ import {
   PostgresTripMemberLocationRepository,
   type TripMemberLocationRepository,
 } from "./locations/memberLocationRepository.js";
+import {
+  InMemoryTripMapMarkerRepository,
+  PostgresTripMapMarkerRepository,
+  type TripMapMarkerKind,
+  type TripMapMarkerRepository,
+} from "./mapMarkers/tripMapMarkerRepository.js";
 import { InMemoryRoutePlanRepository, PostgresRoutePlanRepository, type RoutePlanRepository } from "./route/routePlanRepository.js";
-import { buildOpenStreetRoutePlan, buildStarterRoutePlan, RoutePlannerError } from "./route/routePlanner.js";
+import { buildOpenStreetRoutePlan, buildStarterRoutePlan, reverseGeocodePoint, RoutePlannerError } from "./route/routePlanner.js";
 import { canManageMembers, canWriteTrip, TripAccessService, type TripRole } from "./trips/tripAccess.js";
 import { InMemoryTripRepository, PostgresTripRepository, type TripRepository } from "./trips/tripRepository.js";
 import {
@@ -41,6 +47,7 @@ const pool = databaseUrl ? createPool() : null;
 const repository: ExpenseRepository = pool ? new PostgresExpenseRepository(pool) : new InMemoryExpenseRepository();
 const memberRepository: TripMemberRepository = pool ? new PostgresTripMemberRepository(pool) : new InMemoryTripMemberRepository();
 const messageRepository: TripMessageRepository = pool ? new PostgresTripMessageRepository(pool) : new InMemoryTripMessageRepository();
+const mapMarkerRepository: TripMapMarkerRepository = pool ? new PostgresTripMapMarkerRepository(pool) : new InMemoryTripMapMarkerRepository();
 const locationRepository: TripMemberLocationRepository = pool
   ? new PostgresTripMemberLocationRepository(pool)
   : new InMemoryTripMemberLocationRepository();
@@ -367,6 +374,105 @@ app.post("/api/v1/trips/:tripId/route-plan", async (request, reply) => {
   }
 });
 
+app.get("/api/v1/trips/:tripId/map-markers", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  return {
+    markers: await mapMarkerRepository.listByTrip(tripId),
+  };
+});
+
+app.post("/api/v1/trips/:tripId/map-markers", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const parsed = parseMapMarkerBody(request.body);
+
+  if (!parsed.ok) {
+    return reply.status(400).send({
+      error: "VALIDATION_ERROR",
+      message: parsed.message,
+    });
+  }
+
+  const marker = await mapMarkerRepository.create({
+    id: `marker_${randomUUID()}`,
+    tripId,
+    userId: user.id,
+    displayName: user.displayName,
+    ...parsed.marker,
+  });
+  publishTripChange(tripId, user.id, "map_marker_changed", user.displayName);
+
+  return reply.status(201).send({
+    marker,
+  });
+});
+
+app.delete("/api/v1/trips/:tripId/map-markers/:markerId", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+  const markerId = parseMarkerId(request.params);
+
+  if (!tripId) {
+    return;
+  }
+
+  if (!markerId) {
+    return reply.status(400).send({
+      error: "INVALID_MARKER",
+      message: "Marker id is required",
+    });
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const marker = await mapMarkerRepository.findById(tripId, markerId);
+
+  if (!marker) {
+    return reply.status(404).send({
+      error: "MARKER_NOT_FOUND",
+      message: "Không tìm thấy điểm đánh dấu",
+    });
+  }
+
+  const role = await tripAccess.getRole(tripId, user.id);
+
+  if (marker.userId !== user.id && (!role || !canManageMembers(role))) {
+    return reply.status(403).send({
+      error: "FORBIDDEN",
+      message: "Bạn chỉ có thể xóa điểm do mình tạo",
+    });
+  }
+
+  await mapMarkerRepository.remove(tripId, markerId);
+  publishTripChange(tripId, user.id, "map_marker_changed", user.displayName);
+
+  return reply.status(204).send();
+});
+
 app.get("/api/v1/trips/:tripId/members", async (request, reply) => {
   const { tripId } = parseTripParams(request.params, reply);
 
@@ -403,6 +509,59 @@ app.get("/api/v1/trips/:tripId/locations", async (request, reply) => {
   return {
     locations: await locationRepository.listActiveByTrip(tripId),
   };
+});
+
+app.get("/api/v1/trips/:tripId/locations/:memberId/address", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+  const memberId = parseMemberId(request.params);
+
+  if (!tripId) {
+    return;
+  }
+
+  if (!memberId) {
+    return reply.status(400).send({
+      error: "INVALID_MEMBER",
+      message: "Member id is required",
+    });
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  await locationRepository.pruneExpired();
+  const location = (await locationRepository.listActiveByTrip(tripId)).find((item) => item.userId === memberId);
+
+  if (!location) {
+    return reply.status(404).send({
+      error: "LOCATION_NOT_FOUND",
+      message: "Thành viên này chưa bật chia sẻ GPS",
+    });
+  }
+
+  try {
+    const address = await reverseGeocodePoint({
+      lat: location.latitude,
+      lng: location.longitude,
+    });
+
+    return {
+      address: {
+        userId: memberId,
+        displayName: location.displayName,
+        label: address.label,
+        address: address.address,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        resolvedAt: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    return sendRoutePlannerError(reply, error);
+  }
 });
 
 app.put("/api/v1/trips/:tripId/locations/me", async (request, reply) => {
@@ -869,6 +1028,57 @@ function parseMessageBody(body: unknown):
   };
 }
 
+function parseMapMarkerBody(body: unknown):
+  | {
+      ok: true;
+      marker: {
+        label: string;
+        kind: TripMapMarkerKind;
+        latitude: number;
+        longitude: number;
+      };
+    }
+  | {
+      ok: false;
+      message: string;
+    } {
+  if (!body || typeof body !== "object") {
+    return { ok: false, message: "Nội dung gửi lên không hợp lệ" };
+  }
+
+  const input = body as Record<string, unknown>;
+  const label = parseString(input.label);
+  const kind = parseMapMarkerKind(input.kind);
+  const latitude = parseFiniteNumber(input.latitude);
+  const longitude = parseFiniteNumber(input.longitude);
+
+  if (!label || label.length > 80) {
+    return { ok: false, message: "Tên điểm đánh dấu phải có từ 1 đến 80 ký tự" };
+  }
+
+  if (!kind) {
+    return { ok: false, message: "Loại điểm đánh dấu không hợp lệ" };
+  }
+
+  if (latitude === null || latitude < -90 || latitude > 90) {
+    return { ok: false, message: "Vĩ độ phải nằm trong khoảng -90 đến 90" };
+  }
+
+  if (longitude === null || longitude < -180 || longitude > 180) {
+    return { ok: false, message: "Kinh độ phải nằm trong khoảng -180 đến 180" };
+  }
+
+  return {
+    ok: true,
+    marker: {
+      label,
+      kind,
+      latitude,
+      longitude,
+    },
+  };
+}
+
 function parseCreateExpenseBody(body: unknown):
   | {
       ok: true;
@@ -1156,12 +1366,24 @@ function parseRole(value: unknown): TripRole | null {
   return value === "owner" || value === "editor" || value === "viewer" ? value : null;
 }
 
+function parseMapMarkerKind(value: unknown): TripMapMarkerKind | null {
+  return value === "ping" || value === "meetup" || value === "fuel" || value === "repair" || value === "warning" ? value : null;
+}
+
 function parseMemberId(params: unknown): string | null {
   if (!params || typeof params !== "object") {
     return null;
   }
 
   return parseString((params as { memberId?: unknown }).memberId);
+}
+
+function parseMarkerId(params: unknown): string | null {
+  if (!params || typeof params !== "object") {
+    return null;
+  }
+
+  return parseString((params as { markerId?: unknown }).markerId);
 }
 
 function isMemberReferenced(expenses: StoredExpense[], userId: string): boolean {

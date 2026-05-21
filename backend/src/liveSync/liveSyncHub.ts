@@ -3,6 +3,7 @@ export type LiveSyncEventType =
   | "member_changed"
   | "route_plan_updated"
   | "message_created"
+  | "map_marker_changed"
   | "location_updated"
   | "location_stopped"
   | "presence_joined"

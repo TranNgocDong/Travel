@@ -2,6 +2,7 @@
 
 import {
   ArrowRightLeft,
+  AlertTriangle,
   Bike,
   Calculator,
   Check,
@@ -30,13 +31,17 @@ import { FormEvent, type RefObject, useCallback, useEffect, useMemo, useRef, use
 import {
   addTripMember,
   createExpense,
+  createTripMapMarker,
   createTrip,
   defaultTripId,
+  deleteTripMapMarker,
   fetchExpenses,
+  fetchMemberLocationAddress,
   fetchMe,
   fetchRoutePlan,
   fetchTripMessages,
   fetchTripLocations,
+  fetchTripMapMarkers,
   fetchTripPresence,
   fetchSettlementResult,
   fetchTripMembers,
@@ -57,7 +62,10 @@ import {
   type ApiExpense,
   type ApiExpenseSplit,
   type ApiGeoPoint,
+  type ApiMapMarker,
+  type ApiMapMarkerKind,
   type ApiMemberLocation,
+  type ApiMemberLocationAddress,
   type ApiPresenceUser,
   type ApiRoutePlan,
   type ApiRouteStopKind,
@@ -91,11 +99,24 @@ type PresenceNotice = {
   tone: "join" | "leave" | "message";
 };
 
+type FocusedLocationRequest = {
+  userId: string;
+  requestedAt: number;
+};
+
 const categories = [
   { id: "fuel", label: "Xăng", icon: Fuel },
   { id: "food", label: "Ăn uống", icon: ReceiptText },
   { id: "hotel", label: "Nghỉ ngơi", icon: Bike },
   { id: "border", label: "Cửa khẩu", icon: ShieldCheck },
+];
+
+const mapMarkerKinds: Array<{ id: ApiMapMarkerKind; label: string; icon: typeof MapPin }> = [
+  { id: "ping", label: "Ping", icon: MapPin },
+  { id: "meetup", label: "Hẹn gặp", icon: Users },
+  { id: "fuel", label: "Đổ xăng", icon: Fuel },
+  { id: "repair", label: "Sửa xe", icon: Bike },
+  { id: "warning", label: "Cảnh báo", icon: AlertTriangle },
 ];
 
 const locationShareIntervalMs = 15_000;
@@ -109,9 +130,14 @@ export function ExpensePlanner() {
   const [selectedTripId, setSelectedTripId] = useState(defaultTripId);
   const [balances, setBalances] = useState<ApiBalance[]>([]);
   const [settlements, setSettlements] = useState<ApiSettlement[]>([]);
+  const [mapMarkers, setMapMarkers] = useState<ApiMapMarker[]>([]);
   const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
   const [presenceUsers, setPresenceUsers] = useState<ApiPresenceUser[]>([]);
   const [presenceNotice, setPresenceNotice] = useState<PresenceNotice | null>(null);
+  const [selectedPresenceUserId, setSelectedPresenceUserId] = useState<string | null>(null);
+  const [locationAddresses, setLocationAddresses] = useState<Record<string, ApiMemberLocationAddress>>({});
+  const [isResolvingAddressFor, setIsResolvingAddressFor] = useState<string | null>(null);
+  const [focusedLocationRequest, setFocusedLocationRequest] = useState<FocusedLocationRequest | null>(null);
   const [chatMessages, setChatMessages] = useState<ApiTripMessage[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
@@ -122,6 +148,12 @@ export function ExpensePlanner() {
   const [routeOrigin, setRouteOrigin] = useState("");
   const [routeOriginCoordinate, setRouteOriginCoordinate] = useState<ApiGeoPoint | null>(null);
   const [routeDestination, setRouteDestination] = useState("");
+  const [isPlacingMapMarker, setIsPlacingMapMarker] = useState(false);
+  const [pendingMapMarker, setPendingMapMarker] = useState<ApiGeoPoint | null>(null);
+  const [mapMarkerLabel, setMapMarkerLabel] = useState("");
+  const [mapMarkerKind, setMapMarkerKind] = useState<ApiMapMarkerKind>("ping");
+  const [isSavingMapMarker, setIsSavingMapMarker] = useState(false);
+  const [deletingMapMarkerId, setDeletingMapMarkerId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode>("VND");
@@ -166,6 +198,7 @@ export function ExpensePlanner() {
     setRouteOrigin(nextRoutePlan.origin);
     setRouteOriginCoordinate(null);
     setRouteDestination(nextRoutePlan.destination);
+    setFocusedLocationRequest(null);
     setOfflineReady(true);
     setIsUsingOfflineRoute(Boolean(options.fromCache));
 
@@ -209,6 +242,7 @@ export function ExpensePlanner() {
         setExpenses([]);
         setBalances([]);
         setSettlements([]);
+        setMapMarkers([]);
         setMemberLocations([]);
         setPresenceUsers([]);
         setChatMessages([]);
@@ -226,7 +260,7 @@ export function ExpensePlanner() {
         return;
       }
 
-      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence, nextMessages] = await Promise.all([
+      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence, nextMessages, nextMapMarkers] = await Promise.all([
         fetchTripMembers(selectedTripId),
         fetchExpenses(selectedTripId),
         fetchSettlementResult(selectedTripId),
@@ -234,6 +268,7 @@ export function ExpensePlanner() {
         fetchTripLocations(selectedTripId).catch(() => []),
         fetchTripPresence(selectedTripId).catch(() => []),
         fetchTripMessages(selectedTripId).catch(() => []),
+        fetchTripMapMarkers(selectedTripId).catch(() => []),
       ]);
       const mappedMembers = nextMembers.map(mapTripMember);
       const memberIds = mappedMembers.map((member) => member.id);
@@ -249,6 +284,7 @@ export function ExpensePlanner() {
       setMemberLocations(nextLocations);
       setPresenceUsers(nextPresence);
       setChatMessages(nextMessages);
+      setMapMarkers(nextMapMarkers);
       if (canUpdateRouteForm) {
         applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       } else {
@@ -299,6 +335,14 @@ export function ExpensePlanner() {
       setChatMessages(await fetchTripMessages(targetTripId));
     } catch {
       // Chat history should refresh when possible, but the trip must remain usable offline.
+    }
+  }, [selectedTripId]);
+
+  const loadTripMapMarkers = useCallback(async (targetTripId = selectedTripId) => {
+    try {
+      setMapMarkers(await fetchTripMapMarkers(targetTripId));
+    } catch {
+      // Map markers are shared hints; stale markers should not block route work.
     }
   }, [selectedTripId]);
 
@@ -467,6 +511,7 @@ export function ExpensePlanner() {
         setIsLiveSyncConnected(true);
         void loadTripPresence(activeTrip.id);
         void loadTripMessages(activeTrip.id);
+        void loadTripMapMarkers(activeTrip.id);
       },
       onError: () => {
         setIsLiveSyncConnected(false);
@@ -512,6 +557,11 @@ export function ExpensePlanner() {
           return;
         }
 
+        if (event.type === "map_marker_changed") {
+          void loadTripMapMarkers(activeTrip.id);
+          return;
+        }
+
         if (refreshTimeout) {
           window.clearTimeout(refreshTimeout);
         }
@@ -535,7 +585,7 @@ export function ExpensePlanner() {
       setIsLiveSyncConnected(false);
       unsubscribe();
     };
-  }, [activeTrip?.id, currentUser, isChatOpen, loadTripData, loadTripLocations, loadTripMessages, loadTripPresence]);
+  }, [activeTrip?.id, currentUser, isChatOpen, loadTripData, loadTripLocations, loadTripMapMarkers, loadTripMessages, loadTripPresence]);
 
   useEffect(() => {
     return () => {
@@ -925,6 +975,10 @@ export function ExpensePlanner() {
       setRouteOrigin("Vị trí của tôi");
       setRouteOriginCoordinate(originCoordinate);
       setRouteDestination(destinationName);
+      setFocusedLocationRequest({
+        userId: location.userId,
+        requestedAt: Date.now(),
+      });
 
       const nextRoutePlan = await planRoute({
         origin: "Vị trí của tôi",
@@ -936,6 +990,136 @@ export function ExpensePlanner() {
       setActiveTab("route");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới thành viên");
+    } finally {
+      setIsUsingCurrentLocation(false);
+      setIsPlanningRoute(false);
+    }
+  }
+
+  function handleSelectPresenceUser(userId: string) {
+    setSelectedPresenceUserId((current) => (current === userId ? null : userId));
+  }
+
+  function handleFocusMemberLocation(location: ApiMemberLocation) {
+    setFocusedLocationRequest({
+      userId: location.userId,
+      requestedAt: Date.now(),
+    });
+    setActiveTab("route");
+  }
+
+  async function handleResolveMemberAddress(location: ApiMemberLocation) {
+    setIsResolvingAddressFor(location.userId);
+    setApiError(null);
+
+    try {
+      const address = await fetchMemberLocationAddress(location.userId, selectedTripId);
+      setLocationAddresses((current) => ({
+        ...current,
+        [location.userId]: address,
+      }));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không lấy được địa chỉ");
+    } finally {
+      setIsResolvingAddressFor(null);
+    }
+  }
+
+  function handleToggleMapMarkerPlacement() {
+    setIsPlacingMapMarker((current) => !current);
+    setPendingMapMarker(null);
+  }
+
+  function handleMapMarkerPointSelected(point: ApiGeoPoint) {
+    setPendingMapMarker(point);
+    setIsPlacingMapMarker(false);
+    setMapMarkerLabel((current) => current || mapMarkerKindLabel(mapMarkerKind));
+  }
+
+  async function handleCreateMapMarker(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!pendingMapMarker || isSavingMapMarker) {
+      return;
+    }
+
+    setIsSavingMapMarker(true);
+    setApiError(null);
+
+    try {
+      const marker = await createTripMapMarker({
+        label: mapMarkerLabel.trim() || mapMarkerKindLabel(mapMarkerKind),
+        kind: mapMarkerKind,
+        latitude: pendingMapMarker.lat,
+        longitude: pendingMapMarker.lng,
+      }, selectedTripId);
+      setMapMarkers((current) => [marker, ...current.filter((item) => item.id !== marker.id)]);
+      setPendingMapMarker(null);
+      setMapMarkerLabel("");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không tạo được điểm đánh dấu");
+    } finally {
+      setIsSavingMapMarker(false);
+    }
+  }
+
+  async function handleDeleteMapMarker(marker: ApiMapMarker) {
+    if (deletingMapMarkerId) {
+      return;
+    }
+
+    setDeletingMapMarkerId(marker.id);
+    setApiError(null);
+
+    try {
+      await deleteTripMapMarker(marker.id, selectedTripId);
+      setMapMarkers((current) => current.filter((item) => item.id !== marker.id));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không xóa được điểm đánh dấu");
+    } finally {
+      setDeletingMapMarkerId(null);
+    }
+  }
+
+  async function handlePlanRouteToMapMarker(marker: ApiMapMarker) {
+    if (isPlanningRoute || isUsingCurrentLocation) {
+      return;
+    }
+
+    if (!("geolocation" in navigator)) {
+      setApiError("Trình duyệt không lấy được vị trí GPS");
+      return;
+    }
+
+    setIsUsingCurrentLocation(true);
+    setIsPlanningRoute(true);
+    setApiError(null);
+
+    try {
+      const position = await getCurrentBrowserPosition();
+      const originCoordinate = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      const destinationCoordinate = {
+        lat: marker.latitude,
+        lng: marker.longitude,
+      };
+
+      setRouteOrigin("Vị trí của tôi");
+      setRouteOriginCoordinate(originCoordinate);
+      setRouteDestination(marker.label);
+
+      const nextRoutePlan = await planRoute({
+        origin: "Vị trí của tôi",
+        destination: marker.label,
+        originCoordinate,
+        destinationCoordinate,
+      }, selectedTripId);
+      applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      setActiveTab("route");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới điểm đánh dấu");
     } finally {
       setIsUsingCurrentLocation(false);
       setIsPlanningRoute(false);
@@ -956,9 +1140,16 @@ export function ExpensePlanner() {
     setBalances([]);
     setSettlements([]);
     setMembers([]);
+    setMapMarkers([]);
     setMemberLocations([]);
     setPresenceUsers([]);
     setPresenceNotice(null);
+    setSelectedPresenceUserId(null);
+    setLocationAddresses({});
+    setFocusedLocationRequest(null);
+    setIsPlacingMapMarker(false);
+    setPendingMapMarker(null);
+    setMapMarkerLabel("");
     const cachedRoutePlan = readCachedRoutePlan(nextTripId);
 
     if (cachedRoutePlan) {
@@ -1282,20 +1473,35 @@ export function ExpensePlanner() {
           destination={routeDestination}
           currentUserId={currentUser.id}
           isPlanningRoute={isPlanningRoute}
+          isPlacingMapMarker={isPlacingMapMarker}
+          isSavingMapMarker={isSavingMapMarker}
           isSharingLocation={isSharingLocation}
           isUsingCurrentLocation={isUsingCurrentLocation}
+          focusedLocationRequest={focusedLocationRequest}
           locationShareStatus={locationShareStatus}
+          mapMarkerKind={mapMarkerKind}
+          mapMarkerLabel={mapMarkerLabel}
+          mapMarkers={mapMarkers}
           memberLocations={memberLocations}
+          onCreateMapMarker={handleCreateMapMarker}
+          onDeleteMapMarker={handleDeleteMapMarker}
           onDestinationChange={handleRouteDestinationChange}
+          onMapMarkerKindChange={setMapMarkerKind}
+          onMapMarkerLabelChange={setMapMarkerLabel}
+          onMapMarkerPointSelected={handleMapMarkerPointSelected}
           onOriginChange={handleRouteOriginChange}
           onPlanRoute={handlePlanRoute}
           onPlanRouteFromCurrentLocation={handlePlanRouteFromCurrentLocation}
+          onPlanRouteToMapMarker={handlePlanRouteToMapMarker}
           onPlanRouteToMember={handlePlanRouteToMember}
           onStartSharingLocation={handleStartSharingLocation}
           onStopSharingLocation={handleStopSharingLocation}
+          onToggleMapMarkerPlacement={handleToggleMapMarkerPlacement}
           origin={routeOrigin}
           originCoordinate={routeOriginCoordinate}
+          pendingMapMarker={pendingMapMarker}
           routePlan={routePlan}
+          deletingMapMarkerId={deletingMapMarkerId}
         />
       )}
 
@@ -1422,7 +1628,20 @@ export function ExpensePlanner() {
         </form>
 
         <div className="group-stack">
-          <PresencePanel currentUserId={currentUser.id} presenceUsers={presenceUsers} />
+          <PresencePanel
+            currentUserId={currentUser.id}
+            isPlanningRoute={isPlanningRoute}
+            isResolvingAddressFor={isResolvingAddressFor}
+            isUsingCurrentLocation={isUsingCurrentLocation}
+            locationAddresses={locationAddresses}
+            memberLocations={memberLocations}
+            onFocusLocation={handleFocusMemberLocation}
+            onPlanRouteToMember={handlePlanRouteToMember}
+            onResolveAddress={handleResolveMemberAddress}
+            onSelectUser={handleSelectPresenceUser}
+            presenceUsers={presenceUsers}
+            selectedUserId={selectedPresenceUserId}
+          />
 
           <SettlementPanel balances={balances} members={members} settlements={settlements} />
 
@@ -1565,7 +1784,33 @@ function ChatDock({
   );
 }
 
-function PresencePanel({ currentUserId, presenceUsers }: { currentUserId: string; presenceUsers: ApiPresenceUser[] }) {
+function PresencePanel({
+  currentUserId,
+  isPlanningRoute,
+  isResolvingAddressFor,
+  isUsingCurrentLocation,
+  locationAddresses,
+  memberLocations,
+  onFocusLocation,
+  onPlanRouteToMember,
+  onResolveAddress,
+  onSelectUser,
+  presenceUsers,
+  selectedUserId,
+}: {
+  currentUserId: string;
+  isPlanningRoute: boolean;
+  isResolvingAddressFor: string | null;
+  isUsingCurrentLocation: boolean;
+  locationAddresses: Record<string, ApiMemberLocationAddress>;
+  memberLocations: ApiMemberLocation[];
+  onFocusLocation: (location: ApiMemberLocation) => void;
+  onPlanRouteToMember: (location: ApiMemberLocation) => void;
+  onResolveAddress: (location: ApiMemberLocation) => void;
+  onSelectUser: (userId: string) => void;
+  presenceUsers: ApiPresenceUser[];
+  selectedUserId: string | null;
+}) {
   return (
     <section className="presence-panel" aria-label="Hiện diện trong phòng">
       <div className="panel-heading">
@@ -1578,19 +1823,58 @@ function PresencePanel({ currentUserId, presenceUsers }: { currentUserId: string
 
       <div className="presence-list">
         {presenceUsers.length ? (
-          presenceUsers.map((user) => (
-            <div className={user.userId === currentUserId ? "presence-row self" : "presence-row"} key={user.userId}>
-              <Avatar member={{ id: user.userId, name: user.displayName, initials: createInitials(user.displayName) }} />
-              <div>
-                <strong>{user.userId === currentUserId ? "Bạn" : user.displayName}</strong>
-                <span>
-                  Online từ {formatLocationTime(user.onlineSince)}
-                  {user.connectionCount > 1 ? ` - ${user.connectionCount} thiết bị` : ""}
-                </span>
-              </div>
-              <i aria-label="Đang online" />
-            </div>
-          ))
+          presenceUsers.map((user) => {
+            const location = memberLocations.find((item) => item.userId === user.userId);
+            const address = locationAddresses[user.userId];
+            const isSelected = selectedUserId === user.userId;
+            const canRouteToMember = Boolean(location && user.userId !== currentUserId && !isPlanningRoute && !isUsingCurrentLocation);
+
+            return (
+              <article className={isSelected ? "presence-item selected" : "presence-item"} key={user.userId}>
+                <button
+                  className={user.userId === currentUserId ? "presence-row self" : "presence-row"}
+                  type="button"
+                  onClick={() => onSelectUser(user.userId)}
+                >
+                  <Avatar member={{ id: user.userId, name: user.displayName, initials: createInitials(user.displayName) }} />
+                  <div>
+                    <strong>{user.userId === currentUserId ? "Bạn" : user.displayName}</strong>
+                    <span>
+                      Online từ {formatLocationTime(user.onlineSince)}
+                      {user.connectionCount > 1 ? ` - ${user.connectionCount} thiết bị` : ""}
+                    </span>
+                  </div>
+                  <i aria-label="Đang online" />
+                </button>
+
+                {isSelected && (
+                  <div className="presence-actions">
+                    {location ? (
+                      <>
+                        <div className="presence-action-buttons">
+                          <button type="button" onClick={() => onFocusLocation(location)}>
+                            <MapPin size={15} />
+                            <span>Định vị</span>
+                          </button>
+                          <button type="button" disabled={!canRouteToMember} onClick={() => onPlanRouteToMember(location)}>
+                            <Navigation size={15} />
+                            <span>Đi gặp</span>
+                          </button>
+                          <button type="button" disabled={isResolvingAddressFor === user.userId} onClick={() => onResolveAddress(location)}>
+                            <MapPin size={15} />
+                            <span>{isResolvingAddressFor === user.userId ? "Đang lấy..." : "Lấy địa chỉ"}</span>
+                          </button>
+                        </div>
+                        <p>{address ? address.address : `GPS cập nhật ${formatLocationTime(location.sharedAt)}`}</p>
+                      </>
+                    ) : (
+                      <p>Người này đang online nhưng chưa bật chia sẻ GPS.</p>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })
         ) : (
           <p>Chưa thấy ai trong phòng. Khi có người mở chuyến đi, danh sách sẽ tự hiện.</p>
         )}
@@ -1747,39 +2031,69 @@ function MemberManagerPanel({
 
 function RouteIntelligence({
   currentUserId,
+  deletingMapMarkerId,
   destination,
+  focusedLocationRequest,
   isPlanningRoute,
+  isPlacingMapMarker,
+  isSavingMapMarker,
   isSharingLocation,
   isUsingCurrentLocation,
   locationShareStatus,
+  mapMarkerKind,
+  mapMarkerLabel,
+  mapMarkers,
   memberLocations,
+  onCreateMapMarker,
+  onDeleteMapMarker,
   onDestinationChange,
+  onMapMarkerKindChange,
+  onMapMarkerLabelChange,
+  onMapMarkerPointSelected,
   onOriginChange,
   onPlanRoute,
   onPlanRouteFromCurrentLocation,
+  onPlanRouteToMapMarker,
   onPlanRouteToMember,
   onStartSharingLocation,
   onStopSharingLocation,
+  onToggleMapMarkerPlacement,
   origin,
   originCoordinate,
+  pendingMapMarker,
   routePlan,
 }: {
   currentUserId: string;
+  deletingMapMarkerId: string | null;
   destination: string;
+  focusedLocationRequest: FocusedLocationRequest | null;
   isPlanningRoute: boolean;
+  isPlacingMapMarker: boolean;
+  isSavingMapMarker: boolean;
   isSharingLocation: boolean;
   isUsingCurrentLocation: boolean;
   locationShareStatus: LocationShareStatus;
+  mapMarkerKind: ApiMapMarkerKind;
+  mapMarkerLabel: string;
+  mapMarkers: ApiMapMarker[];
   memberLocations: ApiMemberLocation[];
+  onCreateMapMarker: (event: FormEvent<HTMLFormElement>) => void;
+  onDeleteMapMarker: (marker: ApiMapMarker) => void;
   onDestinationChange: (value: string) => void;
+  onMapMarkerKindChange: (kind: ApiMapMarkerKind) => void;
+  onMapMarkerLabelChange: (value: string) => void;
+  onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
   onOriginChange: (value: string) => void;
   onPlanRoute: (event: FormEvent<HTMLFormElement>) => void;
   onPlanRouteFromCurrentLocation: () => void;
+  onPlanRouteToMapMarker: (marker: ApiMapMarker) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
   onStartSharingLocation: () => void;
   onStopSharingLocation: () => void;
+  onToggleMapMarkerPlacement: () => void;
   origin: string;
   originCoordinate: ApiGeoPoint | null;
+  pendingMapMarker: ApiGeoPoint | null;
   routePlan: ApiRoutePlan;
 }) {
   return (
@@ -1816,7 +2130,16 @@ function RouteIntelligence({
 
       <div className="route-intel-grid">
         <div className="route-map-panel">
-          <OpenStreetRouteMap currentUserId={currentUserId} memberLocations={memberLocations} onPlanRouteToMember={onPlanRouteToMember} routePlan={routePlan} />
+          <OpenStreetRouteMap
+            currentUserId={currentUserId}
+            focusedLocationRequest={focusedLocationRequest}
+            isPlacingMapMarker={isPlacingMapMarker}
+            mapMarkers={mapMarkers}
+            memberLocations={memberLocations}
+            onMapMarkerPointSelected={onMapMarkerPointSelected}
+            onPlanRouteToMember={onPlanRouteToMember}
+            routePlan={routePlan}
+          />
           <div className="route-map-head">
             <span>
               {routePlan.origin} {" -> "} {routePlan.destination}
@@ -1878,6 +2201,69 @@ function RouteIntelligence({
               )}
             </div>
           </div>
+
+          <form className="map-marker-card" onSubmit={onCreateMapMarker}>
+            <div className="map-marker-head">
+              <div>
+                <span className="eyebrow">Đánh dấu</span>
+                <strong>{mapMarkers.length} điểm trên map</strong>
+              </div>
+              <button className={isPlacingMapMarker ? "map-pick-button active" : "map-pick-button"} type="button" onClick={onToggleMapMarkerPlacement}>
+                <MapPin size={15} />
+                <span>{isPlacingMapMarker ? "Đang chọn" : "Chọn điểm"}</span>
+              </button>
+            </div>
+
+            <div className="marker-kind-grid" aria-label="Loại điểm đánh dấu">
+              {mapMarkerKinds.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <button
+                    key={item.id}
+                    className={mapMarkerKind === item.id ? "active" : ""}
+                    type="button"
+                    onClick={() => onMapMarkerKindChange(item.id)}
+                  >
+                    <Icon size={14} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <input value={mapMarkerLabel} onChange={(event) => onMapMarkerLabelChange(event.target.value)} placeholder="Tên điểm đánh dấu" />
+
+            <p className={pendingMapMarker ? "marker-coordinate selected" : "marker-coordinate"}>
+              {pendingMapMarker ? `${pendingMapMarker.lat.toFixed(5)}, ${pendingMapMarker.lng.toFixed(5)}` : "Bấm Chọn điểm rồi chạm vào bản đồ."}
+            </p>
+
+            <button className="map-marker-save" type="submit" disabled={!pendingMapMarker || isSavingMapMarker}>
+              {isSavingMapMarker ? "Đang lưu" : "Lưu điểm"}
+            </button>
+
+            <div className="map-marker-list">
+              {mapMarkers.length ? (
+                mapMarkers.slice(0, 5).map((marker) => (
+                  <div className="map-marker-row" key={marker.id}>
+                    <span className={`map-marker-dot ${marker.kind}`}>{mapMarkerSymbol(marker.kind)}</span>
+                    <div>
+                      <strong>{marker.label}</strong>
+                      <small>{marker.displayName} - {formatLocationTime(marker.createdAt)}</small>
+                    </div>
+                    <button type="button" onClick={() => onPlanRouteToMapMarker(marker)}>
+                      Tới
+                    </button>
+                    <button type="button" disabled={deletingMapMarkerId === marker.id} onClick={() => onDeleteMapMarker(marker)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p>Chưa có điểm đánh dấu nào.</p>
+              )}
+            </div>
+          </form>
         </div>
       </div>
 
@@ -1892,12 +2278,20 @@ function RouteIntelligence({
 
 function OpenStreetRouteMap({
   currentUserId,
+  focusedLocationRequest,
+  isPlacingMapMarker,
+  mapMarkers,
   memberLocations,
+  onMapMarkerPointSelected,
   onPlanRouteToMember,
   routePlan,
 }: {
   currentUserId: string;
+  focusedLocationRequest: FocusedLocationRequest | null;
+  isPlacingMapMarker: boolean;
+  mapMarkers: ApiMapMarker[];
   memberLocations: ApiMemberLocation[];
+  onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
   routePlan: ApiRoutePlan;
 }) {
@@ -1908,6 +2302,7 @@ function OpenStreetRouteMap({
   const userMarkerRef = useRef<import("leaflet").Marker | null>(null);
   const userAccuracyRef = useRef<import("leaflet").Circle | null>(null);
   const memberLocationLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const mapMarkerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const [status, setStatus] = useState<LeafletMapStatus>("loading");
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationWatchStatus>("idle");
@@ -1922,6 +2317,11 @@ function OpenStreetRouteMap({
   const clearMemberLocationLayer = useCallback(() => {
     memberLocationLayerRef.current?.remove();
     memberLocationLayerRef.current = null;
+  }, []);
+
+  const clearMapMarkerLayer = useCallback(() => {
+    mapMarkerLayerRef.current?.remove();
+    mapMarkerLayerRef.current = null;
   }, []);
 
   const updateUserPosition = useCallback(async (position: GeolocationPosition) => {
@@ -2045,6 +2445,9 @@ function OpenStreetRouteMap({
 
       const layer = leaflet.layerGroup();
 
+      let focusedMarker: import("leaflet").Marker | null = null;
+      let focusedLatLng: import("leaflet").LatLng | null = null;
+
       for (const location of memberLocations) {
         const latLng = leaflet.latLng(location.latitude, location.longitude);
         const label = location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên";
@@ -2068,6 +2471,11 @@ function OpenStreetRouteMap({
 
         marker.addTo(layer);
 
+        if (location.userId === focusedLocationRequest?.userId) {
+          focusedMarker = marker;
+          focusedLatLng = latLng;
+        }
+
         if (location.accuracyMeters && location.accuracyMeters > 0) {
           leaflet
             .circle(latLng, {
@@ -2085,12 +2493,90 @@ function OpenStreetRouteMap({
 
       layer.addTo(map);
       memberLocationLayerRef.current = layer;
+
+      if (focusedLatLng && focusedMarker) {
+        map.setView(focusedLatLng, Math.max(map.getZoom(), 15), {
+          animate: true,
+        });
+        focusedMarker.openPopup();
+      }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [clearMemberLocationLayer, currentUserId, memberLocations, onPlanRouteToMember, status]);
+  }, [clearMemberLocationLayer, currentUserId, focusedLocationRequest?.requestedAt, focusedLocationRequest?.userId, memberLocations, onPlanRouteToMember, status]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (status !== "ready" || !map) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void import("leaflet").then((leaflet) => {
+      if (cancelled || !mapInstanceRef.current) {
+        return;
+      }
+
+      leafletModuleRef.current = leaflet;
+      clearMapMarkerLayer();
+
+      if (!mapMarkers.length) {
+        return;
+      }
+
+      const layer = leaflet.layerGroup();
+
+      for (const marker of mapMarkers) {
+        const latLng = leaflet.latLng(marker.latitude, marker.longitude);
+        leaflet
+          .marker(latLng, {
+            icon: leaflet.divIcon({
+              className: `map-marker-pin ${marker.kind}`,
+              html: `<span>${escapeHtml(mapMarkerSymbol(marker.kind))}</span>`,
+              iconAnchor: [16, 32],
+              iconSize: [32, 32],
+            }),
+            title: marker.label,
+          })
+          .bindPopup(
+            `<strong>${escapeHtml(marker.label)}</strong><br />${escapeHtml(mapMarkerKindLabel(marker.kind))} - ${escapeHtml(marker.displayName)}<br />${escapeHtml(formatLocationTime(marker.createdAt))}`,
+          )
+          .addTo(layer);
+      }
+
+      layer.addTo(map);
+      mapMarkerLayerRef.current = layer;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearMapMarkerLayer, mapMarkers, status]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (status !== "ready" || !map || !isPlacingMapMarker) {
+      return;
+    }
+
+    const handleClick = (event: import("leaflet").LeafletMouseEvent) => {
+      onMapMarkerPointSelected({
+        lat: event.latlng.lat,
+        lng: event.latlng.lng,
+      });
+    };
+
+    map.on("click", handleClick);
+
+    return () => {
+      map.off("click", handleClick);
+    };
+  }, [isPlacingMapMarker, onMapMarkerPointSelected, status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2112,6 +2598,7 @@ function OpenStreetRouteMap({
         mapInstanceRef.current?.remove();
         clearUserLocationLayer();
         clearMemberLocationLayer();
+        clearMapMarkerLayer();
         leafletModuleRef.current = leaflet;
 
         const latLngs = points.map((point) => leaflet.latLng(point.lat, point.lng));
@@ -2174,8 +2661,9 @@ function OpenStreetRouteMap({
       mapInstanceRef.current = null;
       clearUserLocationLayer();
       clearMemberLocationLayer();
+      clearMapMarkerLayer();
     };
-  }, [clearMemberLocationLayer, clearUserLocationLayer, routePlan]);
+  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearUserLocationLayer, routePlan]);
 
   useEffect(() => {
     return () => {
@@ -2186,7 +2674,7 @@ function OpenStreetRouteMap({
   }, []);
 
   return (
-    <div className="osm-map-shell">
+    <div className={isPlacingMapMarker ? "osm-map-shell placing" : "osm-map-shell"}>
       <div className="osm-map-canvas" ref={mapElementRef} />
       {status === "ready" && (
         <div className="osm-map-controls">
@@ -2418,13 +2906,53 @@ function formatLocationTime(value: string): string {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "vua xong";
+    return "vừa xong";
   }
 
   return new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function mapMarkerKindLabel(kind: ApiMapMarkerKind): string {
+  if (kind === "meetup") {
+    return "Hẹn gặp";
+  }
+
+  if (kind === "fuel") {
+    return "Đổ xăng";
+  }
+
+  if (kind === "repair") {
+    return "Sửa xe";
+  }
+
+  if (kind === "warning") {
+    return "Cảnh báo";
+  }
+
+  return "Ping";
+}
+
+function mapMarkerSymbol(kind: ApiMapMarkerKind): string {
+  if (kind === "meetup") {
+    return "H";
+  }
+
+  if (kind === "fuel") {
+    return "X";
+  }
+
+  if (kind === "repair") {
+    return "S";
+  }
+
+  if (kind === "warning") {
+    return "!";
+  }
+
+  return "+";
 }
 
 function escapeHtml(value: string): string {
