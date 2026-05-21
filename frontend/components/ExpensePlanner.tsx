@@ -1432,9 +1432,14 @@ export function ExpensePlanner() {
 
   return (
     <main className="app-shell" data-active-tab={activeTab}>
+      <div className="app-backdrop" aria-hidden="true">
+        <span className="backdrop-route one" />
+        <span className="backdrop-route two" />
+      </div>
+
       <header className="top-bar">
-        <div className="brand-mark" aria-hidden="true">
-          <Bike size={20} />
+        <div className="brand-mark logo-mark" aria-hidden="true">
+          <img src="/trailledger-logo.png" alt="" />
         </div>
         <div className="brand-copy">
           <p>TrailLedger</p>
@@ -1506,7 +1511,7 @@ export function ExpensePlanner() {
         />
       </section>
 
-      <nav className="mobile-tabs" aria-label="Chuyển màn hình">
+      <nav className="mobile-tabs app-tabs" aria-label="Chuyển màn hình">
         <button className={tabButtonClass(activeTab, "route")} type="button" onClick={() => setActiveTab("route")}>
           <Map size={17} />
           <span>Bản đồ</span>

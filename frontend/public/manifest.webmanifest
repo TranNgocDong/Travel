@@ -1,7 +1,7 @@
 {
   "name": "TrailLedger",
   "short_name": "TrailLedger",
-  "description": "Mobile-first travel planner for routes, weather, and expenses.",
+  "description": "Travel group workspace for routes, GPS, chat, and shared expenses.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",

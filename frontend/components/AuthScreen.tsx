@@ -1,6 +1,6 @@
 "use client";
 
-import { Bike, Check, Eye, EyeOff, KeyRound, LockKeyhole, Mail, Moon, ShieldCheck, Sun, UserRound, X } from "lucide-react";
+import { Check, Compass, Eye, EyeOff, Globe2, KeyRound, Languages, LockKeyhole, Mail, MapPin, Moon, ShieldCheck, Sun, UserRound, X } from "lucide-react";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 
 import { login, loginWithApple, loginWithGoogle, registerWithEmail, requestPasswordReset, type ApiUser } from "@/lib/api";
@@ -209,43 +209,65 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   const confirmPasswordInputType = showConfirmPassword ? "text" : "password";
 
   return (
-    <main className="auth-page">
-      <section className="auth-hero" aria-label="TrailLedger security">
+    <main className="auth-page waymate-auth">
+      <section className="auth-hero" aria-label="TrailLedger travel security">
         <div className="auth-brand">
-          <div className="brand-mark" aria-hidden="true">
-            <Bike size={22} />
-          </div>
+          <img className="brand-logo" src="/trailledger-logo.png" alt="TrailLedger" />
           <div>
             <p>TrailLedger</p>
-            <span>Không gian chuyến đi bảo mật</span>
+            <span>Bạn đồng hành cho mọi cung đường</span>
           </div>
+        </div>
+
+        <div className="auth-visual-card" aria-hidden="true">
+          <div className="visual-sky" />
+          <div className="visual-mountain back" />
+          <div className="visual-mountain front" />
+          <div className="visual-road" />
+          <div className="visual-compass">
+            <Compass size={58} />
+          </div>
+          <span className="visual-pin one"><MapPin size={18} /></span>
+          <span className="visual-pin two"><ShieldCheck size={18} /></span>
+          <span className="visual-pin three"><Globe2 size={18} /></span>
         </div>
 
         <div className="auth-hero-copy">
-          <span className="eyebrow">Travel group security</span>
-          <h1>Đăng nhập an toàn cho nhóm đi đường dài.</h1>
-          <p>Firebase Auth, kiểm tra đầu vào, chống brute-force ở giao diện và sẵn sàng nối MFA thật khi triển khai production.</p>
+          <span className="eyebrow">Travel group workspace</span>
+          <h1>
+            <span>Lập kế hoạch.</span>
+            <span>Đi cùng nhau.</span>
+            <span>Theo dõi an toàn.</span>
+          </h1>
         </div>
 
-        <div className="auth-security-list" aria-label="Security controls">
-          <span><Check size={15} /> RBAC theo phòng</span>
-          <span><Check size={15} /> Token không tự lưu localStorage</span>
-          <span><Check size={15} /> OTP-ready flow</span>
-        </div>
       </section>
 
       <section className="auth-panel-zone" aria-label="Authentication form">
         <button className="icon-button auth-theme-button" type="button" title="Đổi giao diện" aria-label="Đổi giao diện" onClick={onThemeToggle}>
           {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
         </button>
+        <button className="icon-button auth-language-button" type="button" title="Ngôn ngữ" aria-label="Ngôn ngữ">
+          <Languages size={19} />
+        </button>
+
+        <div className="auth-mobile-brand">
+          <img className="brand-logo" src="/trailledger-logo.png" alt="TrailLedger" />
+          <div>
+            <p>TrailLedger</p>
+            <span>Travel group workspace</span>
+          </div>
+        </div>
 
         <form className="auth-card" onSubmit={handleSubmit}>
           <div className="auth-card-head">
-            <div>
-              <span className="eyebrow">Bảo mật</span>
-              <h2>{mode === "login" ? "Đăng nhập" : "Đăng ký"}</h2>
+            <div className="auth-card-brand">
+              <img src="/trailledger-logo.png" alt="TrailLedger" />
+              <div>
+                <h2>TrailLedger</h2>
+                <p>{mode === "login" ? "Đăng nhập để tiếp tục chuyến đi." : "Tạo tài khoản cho chuyến đi của bạn."}</p>
+              </div>
             </div>
-            <ShieldCheck size={24} />
           </div>
 
           <div className="auth-switch" role="tablist" aria-label="Chọn chế độ xác thực">
@@ -406,6 +428,12 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           </section>
         </div>
       )}
+
+      <nav className="auth-footer-links" aria-label="Liên kết bảo mật">
+        <button type="button">Bảo mật</button>
+        <button type="button">Điều khoản</button>
+        <button type="button">Hỗ trợ</button>
+      </nav>
     </main>
   );
 }

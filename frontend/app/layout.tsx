@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TrailLedger",
-  description: "Mobile-first travel expense planner",
+  description: "Travel group workspace for routes, GPS, chat, and shared expenses.",
 };
 
 export const viewport: Viewport = {
@@ -24,7 +24,7 @@ export default function RootLayout({
       ? `
         (function () {
           try {
-            var resetKey = "trail-ledger-cache-reset-v7";
+            var resetKey = "trailledger-cache-reset-v2";
             var hadOldCache = false;
 
             if (sessionStorage.getItem(resetKey)) {
@@ -43,7 +43,7 @@ export default function RootLayout({
               "caches" in window
                 ? caches.keys().then(function (keys) {
                     var trailLedgerCaches = keys.filter(function (key) {
-                      return key.indexOf("trail-ledger") === 0;
+                      return key.indexOf("trail-ledger") === 0 || key.indexOf("waymate") === 0;
                     });
 
                     hadOldCache = hadOldCache || trailLedgerCaches.length > 0;
@@ -67,7 +67,7 @@ export default function RootLayout({
       `
       : `
         (function () {
-          var resetKey = "trail-ledger-dev-cache-reset-v6";
+          var resetKey = "trailledger-dev-cache-reset-v2";
           if (location.hostname !== "localhost" || sessionStorage.getItem(resetKey)) {
             return;
           }
@@ -84,7 +84,7 @@ export default function RootLayout({
             "caches" in window
               ? caches.keys().then(function (keys) {
                   return Promise.all(keys.filter(function (key) {
-                    return key.indexOf("trail-ledger") === 0;
+                    return key.indexOf("trail-ledger") === 0 || key.indexOf("waymate") === 0;
                   }).map(function (key) {
                     return caches.delete(key);
                   }));
@@ -99,7 +99,7 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <head>
-        <Script id="trail-ledger-cache-reset" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: cacheResetScript }} />
+        <Script id="trailledger-cache-reset" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: cacheResetScript }} />
       </head>
       <body>
         {children}

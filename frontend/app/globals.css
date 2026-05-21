@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Lora:wght@700&display=swap&subset=vietnamese");
+
 :root {
   color-scheme: light;
   --bg: #f5f6f2;
@@ -1993,8 +1995,7 @@ button {
 
 .auth-card-head,
 .auth-brand,
-.auth-options,
-.auth-security-list span {
+.auth-options {
   display: flex;
   align-items: center;
 }
@@ -2997,17 +2998,6 @@ button {
     line-height: 1.6;
   }
 
-  .auth-security-list {
-    display: grid;
-    gap: 8px;
-  }
-
-  .auth-security-list span {
-    gap: 8px;
-    color: var(--accent-strong);
-    font-weight: 850;
-  }
-
   .auth-panel-zone {
     padding: 42px;
   }
@@ -3111,4 +3101,1393 @@ button {
   border: 1px solid var(--line);
   background: var(--panel-soft);
   color: var(--text);
+}
+
+/* TrailLedger visual refresh */
+:root {
+  --forest: #0b4d3f;
+  --forest-deep: #073228;
+  --mint: #dff5ed;
+  --sand: #f4ead7;
+  --sand-strong: #d6a84f;
+  --sky: #9fd8d0;
+  --sunset: #b85a3a;
+}
+
+:root[data-theme="light"] {
+  --bg: #f3eee2;
+  --panel: #fffdf7;
+  --panel-soft: #f4efe4;
+  --text: #17231f;
+  --muted: #607069;
+  --line: #d8d0bf;
+  --accent: #0f6a58;
+  --accent-strong: #075444;
+  --accent-soft: #dff5ed;
+  --amber: #ad7a25;
+  --amber-soft: #fff2cf;
+  --shadow: 0 18px 42px rgba(42, 51, 44, 0.12);
+}
+
+:root[data-theme="dark"] {
+  --bg: #09110e;
+  --panel: #14201b;
+  --panel-soft: #1d2d27;
+  --text: #f3f7ef;
+  --muted: #aec0b7;
+  --line: #31443c;
+  --accent: #43cdb6;
+  --accent-strong: #83ead8;
+  --accent-soft: #123e35;
+  --amber: #f0bd67;
+  --amber-soft: #3d2d17;
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+}
+
+body {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sky) 16%, transparent), transparent 280px),
+    linear-gradient(135deg, color-mix(in srgb, var(--sand) 72%, var(--bg)), var(--bg));
+}
+
+.auth-page.waymate-auth {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--sand) 82%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--sky) 28%, transparent), transparent 56%),
+    var(--bg);
+}
+
+.auth-page.waymate-auth::before {
+  position: absolute;
+  inset: auto -8vw -16vh -8vw;
+  z-index: -1;
+  height: 44vh;
+  background:
+    linear-gradient(150deg, transparent 0 18%, color-mix(in srgb, var(--forest) 88%, #000) 18% 45%, transparent 45%),
+    linear-gradient(24deg, transparent 0 35%, color-mix(in srgb, var(--forest) 74%, #0c1c16) 35% 62%, transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--forest) 74%, #0c1c16), color-mix(in srgb, var(--forest-deep) 88%, #000));
+  clip-path: polygon(0 34%, 12% 16%, 23% 42%, 33% 18%, 47% 48%, 60% 24%, 76% 42%, 88% 20%, 100% 40%, 100% 100%, 0 100%);
+  content: "";
+}
+
+.auth-page.waymate-auth::after {
+  position: absolute;
+  right: -10vw;
+  bottom: 4vh;
+  z-index: -1;
+  width: 44vw;
+  height: 28vh;
+  min-width: 360px;
+  border-radius: 50% 0 0 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, #b7ebe5 82%, transparent), color-mix(in srgb, #1a9a91 60%, transparent)),
+    repeating-linear-gradient(178deg, transparent 0 22px, rgba(255, 255, 255, 0.28) 22px 24px);
+  content: "";
+}
+
+.auth-mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: min(100%, 500px);
+  margin: 0 auto 14px;
+}
+
+.auth-mobile-brand p,
+.auth-mobile-brand span {
+  margin: 0;
+}
+
+.auth-mobile-brand p {
+  font-weight: 950;
+}
+
+.auth-mobile-brand span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.auth-visual-card {
+  position: relative;
+  min-height: 300px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--forest) 18%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16)),
+    color-mix(in srgb, var(--sky) 52%, var(--panel));
+  box-shadow: 0 24px 60px rgba(10, 51, 42, 0.16);
+}
+
+.visual-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sky) 62%, #fff), transparent 58%),
+    repeating-linear-gradient(175deg, transparent 0 42px, rgba(255, 255, 255, 0.28) 42px 44px);
+}
+
+.visual-mountain {
+  position: absolute;
+  right: -4%;
+  left: -4%;
+  bottom: 22%;
+  height: 55%;
+  background: color-mix(in srgb, var(--forest) 88%, #10211b);
+  clip-path: polygon(0 72%, 13% 36%, 23% 60%, 34% 20%, 47% 66%, 58% 35%, 70% 66%, 84% 28%, 100% 70%, 100% 100%, 0 100%);
+}
+
+.visual-mountain.back {
+  bottom: 33%;
+  opacity: 0.44;
+  transform: scaleX(1.08);
+}
+
+.visual-mountain.front {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--forest) 88%, #16231d), var(--forest-deep));
+}
+
+.visual-road {
+  position: absolute;
+  left: 44%;
+  bottom: -24%;
+  width: 22%;
+  height: 62%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sand-strong) 82%, #fff), color-mix(in srgb, var(--sand) 86%, #fff));
+  clip-path: polygon(40% 0, 64% 0, 100% 100%, 0 100%);
+}
+
+.visual-compass {
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  display: grid;
+  width: 120px;
+  height: 120px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 999px;
+  background: rgba(255, 253, 247, 0.68);
+  color: var(--forest);
+  box-shadow: 0 18px 40px rgba(5, 45, 36, 0.2);
+  transform: translate(-50%, -50%);
+}
+
+.visual-pin {
+  position: absolute;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 3px solid rgba(255, 255, 255, 0.76);
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 12px 24px rgba(9, 44, 36, 0.22);
+}
+
+.visual-pin.one {
+  left: 20%;
+  top: 56%;
+}
+
+.visual-pin.two {
+  right: 20%;
+  top: 25%;
+  background: #2f8f55;
+}
+
+.visual-pin.three {
+  right: 30%;
+  bottom: 16%;
+  background: var(--sand-strong);
+}
+
+.waymate-auth .auth-card {
+  border-color: color-mix(in srgb, var(--line) 72%, transparent);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: 0 24px 70px rgba(13, 40, 33, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.waymate-auth .auth-switch,
+.waymate-auth .auth-field > div,
+.waymate-auth .auth-human-check {
+  background: color-mix(in srgb, var(--panel-soft) 78%, transparent);
+}
+
+.app-shell {
+  position: relative;
+  width: min(100%, 1540px);
+  max-width: none;
+  padding: 18px clamp(12px, 2vw, 30px) 86px;
+}
+
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.backdrop-route {
+  position: absolute;
+  width: 58vw;
+  max-width: 780px;
+  height: 180px;
+  border: 2px solid color-mix(in srgb, var(--sand-strong) 40%, transparent);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  opacity: 0.26;
+  transform: rotate(-15deg);
+}
+
+.backdrop-route.one {
+  top: 120px;
+  left: -140px;
+}
+
+.backdrop-route.two {
+  right: -180px;
+  bottom: 12%;
+  transform: rotate(18deg);
+}
+
+.top-bar,
+.trip-manager,
+.trip-strip,
+.summary-grid,
+.live-sync-bar,
+.sync-alert,
+.presence-toast,
+.mobile-tabs.app-tabs,
+.route-intel,
+.workspace,
+.expense-list,
+.trip-lifecycle,
+.trip-recap-panel {
+  position: relative;
+}
+
+.top-bar {
+  position: sticky;
+  top: 12px;
+  z-index: 950;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: 0 14px 32px rgba(14, 34, 28, 0.1);
+  backdrop-filter: blur(16px);
+  padding: 10px;
+}
+
+.brand-copy p {
+  font-size: 1.05rem;
+}
+
+.brand-copy span {
+  display: block;
+  margin-top: 2px;
+}
+
+.mobile-tabs.app-tabs {
+  top: 78px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 14px;
+  box-shadow: 0 12px 28px rgba(14, 34, 28, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.trip-manager,
+.route-card,
+.summary-tile,
+.live-sync-bar,
+.trip-lifecycle,
+.trip-recap-panel,
+.route-intel,
+.expense-panel,
+.presence-panel,
+.settlement-panel,
+.member-manager-panel,
+.expense-list {
+  box-shadow: 0 14px 32px rgba(14, 34, 28, 0.08);
+}
+
+.route-card {
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--forest) 94%, #000), color-mix(in srgb, var(--accent) 76%, var(--forest)) 58%, color-mix(in srgb, var(--sand-strong) 44%, var(--accent)) 100%),
+    var(--forest);
+  color: #fff;
+}
+
+.route-card .eyebrow,
+.route-card .route-meta span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.route-card .route-line::before {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.route-card .route-line span {
+  border-color: #fff;
+  background: var(--forest);
+}
+
+.route-card .route-line span:nth-child(2) {
+  border-color: var(--sand-strong);
+}
+
+.route-intel,
+.expense-panel,
+.presence-panel,
+.settlement-panel,
+.member-manager-panel,
+.expense-list,
+.trip-recap-panel,
+.trip-lifecycle {
+  border-color: color-mix(in srgb, var(--line) 82%, transparent);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.route-map-panel,
+.next-stop-card,
+.group-location-card,
+.poi-card,
+.map-marker-card {
+  background: color-mix(in srgb, var(--panel-soft) 86%, transparent);
+}
+
+.osm-map-shell {
+  height: clamp(430px, 58vh, 760px);
+  min-height: 380px;
+}
+
+.route-side-stack {
+  align-content: start;
+  max-height: none;
+}
+
+.chat-bubble {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--forest) 78%, #000));
+}
+
+@media (min-width: 720px) {
+  .auth-page.waymate-auth {
+    grid-template-columns: minmax(430px, 1fr) minmax(430px, 0.82fr);
+  }
+
+  .auth-page.waymate-auth .auth-hero {
+    display: grid;
+    grid-template-rows: auto minmax(260px, 0.78fr) auto auto;
+    gap: 28px;
+    border-right: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    background: transparent;
+    padding: clamp(28px, 4vw, 54px);
+  }
+
+  .auth-mobile-brand {
+    display: none;
+  }
+
+  .auth-page.waymate-auth .auth-panel-zone {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--panel) 74%, transparent), transparent),
+      color-mix(in srgb, var(--panel-soft) 42%, transparent);
+  }
+
+  .auth-page.waymate-auth .auth-hero-copy h1 {
+    font-size: clamp(2.6rem, 4.8vw, 4.6rem);
+    line-height: 1.02;
+  }
+
+  .mobile-tabs.app-tabs {
+    display: grid;
+  }
+
+  .mobile-tabs.app-tabs button {
+    min-height: 48px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .route-intel-grid {
+    grid-template-columns: minmax(0, 2.15fr) minmax(310px, 0.72fr);
+    gap: 14px;
+  }
+
+  .route-builder {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .route-builder-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace {
+    grid-template-columns: minmax(360px, 0.82fr) minmax(360px, 1fr);
+  }
+
+  .app-shell[data-active-tab="expenses"] .workspace,
+  .app-shell[data-active-tab="group"] .workspace {
+    max-width: 980px;
+  }
+
+  .app-shell[data-active-tab="route"] .workspace,
+  .app-shell[data-active-tab="route"] .expense-list,
+  .app-shell[data-active-tab="route"] .trip-recap-panel,
+  .app-shell[data-active-tab="expenses"] .route-intel,
+  .app-shell[data-active-tab="expenses"] .group-stack,
+  .app-shell[data-active-tab="expenses"] .trip-recap-panel,
+  .app-shell[data-active-tab="group"] .route-intel,
+  .app-shell[data-active-tab="group"] .expense-panel,
+  .app-shell[data-active-tab="group"] .expense-list,
+  .app-shell[data-active-tab="group"] .trip-recap-panel,
+  .app-shell[data-active-tab="recap"] .route-intel,
+  .app-shell[data-active-tab="recap"] .workspace,
+  .app-shell[data-active-tab="recap"] .expense-list {
+    display: none;
+  }
+
+  .app-shell[data-active-tab="group"] .workspace {
+    display: grid;
+  }
+
+  .app-shell[data-active-tab="group"] .group-stack {
+    display: grid;
+  }
+}
+
+@media (min-width: 1080px) {
+  .app-shell {
+    padding-top: 22px;
+  }
+
+  .top-bar {
+    grid-template-columns: 48px minmax(220px, 0.7fr) auto;
+  }
+
+  .trip-manager {
+    grid-template-columns: minmax(260px, 0.62fr) minmax(360px, 1fr);
+  }
+
+  .osm-map-shell {
+    height: clamp(560px, 68vh, 820px);
+    min-height: 540px;
+  }
+
+  .route-side-stack {
+    max-height: clamp(560px, 68vh, 820px);
+    overflow: auto;
+    padding-right: 2px;
+  }
+}
+
+@media (max-width: 719px) {
+  .auth-page.waymate-auth {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--sky) 20%, transparent), transparent 220px),
+      var(--bg);
+  }
+
+  .auth-panel-zone {
+    align-content: start;
+    padding-top: 72px;
+  }
+
+  .waymate-auth .auth-card {
+    padding: 16px;
+  }
+
+  .mobile-tabs.app-tabs {
+    top: 70px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .mobile-tabs.app-tabs button {
+    display: grid;
+    min-height: 54px;
+    gap: 4px;
+    font-size: 0.72rem;
+  }
+
+  .route-card {
+    grid-template-columns: 1fr;
+  }
+
+  .route-meta {
+    justify-items: start;
+    white-space: normal;
+  }
+
+  .osm-map-shell {
+    height: min(58vh, 500px);
+    min-height: 380px;
+  }
+}
+
+/* Login screen adjusted to match the supplied Stitch reference */
+.auth-page.waymate-auth {
+  display: block;
+  min-height: 100vh;
+  background-color: #ffffff;
+  background-image: url("/trailledger-login-art.png");
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.auth-page.waymate-auth::before,
+.auth-page.waymate-auth::after {
+  display: none;
+}
+
+.waymate-auth .auth-hero {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  pointer-events: none;
+}
+
+.waymate-auth .auth-brand {
+  position: fixed;
+  left: clamp(28px, 8vw, 160px);
+  bottom: clamp(150px, 31vh, 340px);
+  z-index: 2;
+  gap: 14px;
+  width: min(330px, calc(100vw - 48px));
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: 0 18px 44px rgba(0, 45, 37, 0.16);
+  backdrop-filter: blur(18px);
+  padding: 12px;
+  pointer-events: auto;
+}
+
+.waymate-auth .auth-brand .brand-mark {
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--accent-strong);
+  box-shadow: 0 8px 18px rgba(0, 45, 37, 0.16);
+}
+
+.waymate-auth .auth-brand p {
+  color: #075444;
+  font-size: 2rem;
+  font-weight: 950;
+  line-height: 0.95;
+}
+
+.waymate-auth .auth-brand span {
+  color: rgba(7, 84, 68, 0.72);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.waymate-auth .auth-visual-card,
+.waymate-auth .auth-hero-copy {
+  display: none;
+}
+
+.waymate-auth .auth-panel-zone {
+  display: grid;
+  align-content: center;
+  justify-content: end;
+  min-height: 100vh;
+  padding: clamp(24px, 5vw, 64px) clamp(22px, 8vw, 96px);
+}
+
+.auth-page.waymate-auth .auth-panel-zone {
+  background: transparent;
+}
+
+.waymate-auth .auth-theme-button,
+.waymate-auth .auth-language-button {
+  position: fixed;
+  top: 22px;
+  z-index: 5;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 24px rgba(0, 45, 37, 0.16);
+  color: #26332f;
+}
+
+.waymate-auth .auth-theme-button {
+  right: 82px;
+}
+
+.waymate-auth .auth-language-button {
+  right: 24px;
+}
+
+.waymate-auth .auth-mobile-brand {
+  display: none;
+}
+
+.waymate-auth .auth-card {
+  width: min(460px, calc(100vw - 32px));
+  min-height: min(880px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+  align-content: start;
+  gap: 16px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  background: rgba(248, 252, 249, 0.74);
+  box-shadow: 0 24px 70px rgba(0, 53, 44, 0.18);
+  backdrop-filter: blur(18px);
+  padding: 32px;
+}
+
+.waymate-auth .auth-switch {
+  order: -2;
+  min-height: 70px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(224, 227, 224, 0.72);
+  padding: 8px;
+}
+
+.waymate-auth .auth-switch button {
+  border-radius: 8px;
+  color: rgba(24, 28, 27, 0.58);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+.waymate-auth .auth-switch button.active {
+  background: rgba(255, 255, 255, 0.94);
+  color: #005344;
+  box-shadow: 0 10px 24px rgba(0, 53, 44, 0.12);
+}
+
+.waymate-auth .auth-card-head {
+  margin-top: clamp(32px, 9vh, 106px);
+}
+
+.waymate-auth .auth-card-head h2 {
+  margin: 0;
+  color: #101918;
+  font-size: clamp(1.75rem, 3vw, 2rem);
+  letter-spacing: 0;
+}
+
+.waymate-auth .auth-card-head p {
+  margin: 4px 0 0;
+  color: #2f3b38;
+  font-size: 1rem;
+}
+
+.waymate-auth .auth-card-head svg {
+  color: #68a99c;
+}
+
+.waymate-auth .api-alert,
+.waymate-auth .auth-success {
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.waymate-auth .auth-field {
+  gap: 6px;
+}
+
+.waymate-auth .auth-field > span {
+  color: #181c1b;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+
+.waymate-auth .auth-field > div {
+  min-height: 70px;
+  border-color: rgba(110, 121, 117, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0 16px;
+}
+
+.waymate-auth .auth-field input {
+  color: #181c1b;
+  font-size: 1.05rem;
+  padding-inline: 16px;
+}
+
+.waymate-auth .auth-options {
+  margin-top: -2px;
+}
+
+.waymate-auth .auth-options label {
+  color: #34413e;
+  font-size: 1rem;
+}
+
+.waymate-auth .auth-options button {
+  color: #005344;
+  font-size: 0.98rem;
+}
+
+.waymate-auth .auth-submit {
+  min-height: 78px;
+  margin-top: 0;
+  border-radius: 8px;
+  background: #007b65;
+  box-shadow: 0 12px 24px rgba(0, 83, 68, 0.26);
+  font-size: clamp(1.2rem, 2.5vw, 1.65rem);
+}
+
+.waymate-auth .auth-divider {
+  margin-block: clamp(24px, 7vh, 78px) 20px;
+}
+
+.waymate-auth .social-grid {
+  gap: 30px;
+}
+
+.waymate-auth .social-button {
+  min-height: 66px;
+  border-color: rgba(110, 121, 117, 0.38);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #181c1b;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.waymate-auth .auth-security-note,
+.waymate-auth .password-strength {
+  display: none;
+}
+
+.auth-footer-links {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 3;
+  display: inline-flex;
+  gap: 8px;
+  border-radius: 999px;
+  background: rgba(0, 34, 27, 0.48);
+  backdrop-filter: blur(12px);
+  padding: 8px 12px;
+}
+
+.auth-footer-links button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.9rem;
+  padding: 0 10px;
+}
+
+.auth-footer-links button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 900px) {
+  .waymate-auth .auth-brand {
+    display: none;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    justify-content: center;
+    padding: 78px 16px 82px;
+  }
+
+  .waymate-auth .auth-mobile-brand {
+    display: flex;
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 14px 30px rgba(0, 53, 44, 0.14);
+    backdrop-filter: blur(18px);
+    padding: 10px;
+  }
+
+  .waymate-auth .auth-mobile-brand p {
+    color: #075444;
+    font-size: 1.25rem;
+    font-weight: 950;
+  }
+
+  .waymate-auth .auth-mobile-brand span {
+    color: rgba(7, 84, 68, 0.72);
+    font-size: 0.78rem;
+    font-weight: 750;
+  }
+
+  .waymate-auth .auth-card {
+    max-height: none;
+    overflow: visible;
+    min-height: auto;
+    padding: 20px;
+  }
+
+  .waymate-auth .auth-card-head {
+    margin-top: 24px;
+  }
+
+  .waymate-auth .auth-field > div,
+  .waymate-auth .auth-submit,
+  .waymate-auth .social-button {
+    min-height: 58px;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 901px) {
+  .waymate-auth .auth-card {
+    gap: 12px;
+    min-height: auto;
+    padding: 24px;
+  }
+
+  .waymate-auth .auth-card-head {
+    margin-top: 24px;
+  }
+
+  .waymate-auth .auth-switch {
+    min-height: 58px;
+    padding: 6px;
+  }
+
+  .waymate-auth .auth-field > div {
+    min-height: 56px;
+  }
+
+  .waymate-auth .auth-submit {
+    min-height: 62px;
+    font-size: 1.32rem;
+  }
+
+  .waymate-auth .auth-divider {
+    margin-block: 16px 12px;
+  }
+
+  .waymate-auth .social-button {
+    min-height: 52px;
+  }
+}
+
+/* Official TrailLedger logo */
+.brand-logo {
+  display: block;
+  width: 78px;
+  height: 78px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  object-fit: contain;
+  padding: 5px;
+  box-shadow: 0 14px 32px rgba(0, 60, 49, 0.18);
+}
+
+.logo-mark {
+  overflow: hidden;
+  background: #ffffff;
+  padding: 0;
+}
+
+.logo-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+  transform: scale(1.6) translateY(-8%);
+}
+
+.waymate-auth .auth-brand {
+  align-items: center;
+  width: min(390px, calc(100vw - 48px));
+}
+
+.waymate-auth .auth-brand .brand-logo {
+  width: 92px;
+  height: 92px;
+}
+
+.waymate-auth .auth-mobile-brand .brand-logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
+  padding: 4px;
+}
+
+/* Premium split login trial */
+.auth-page.waymate-auth {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(420px, 0.94fr);
+  min-height: 100svh;
+  overflow: hidden;
+  background-attachment: scroll;
+  background-color: #f8fbf4;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: min(100vw, 1440px) auto;
+}
+
+.auth-page.waymate-auth::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 38%, rgba(255, 255, 255, 0.12) 58%, rgba(255, 255, 255, 0.78) 100%),
+    radial-gradient(circle at 18% 22%, rgba(254, 240, 186, 0.5), transparent 30%),
+    radial-gradient(circle at 70% 72%, rgba(0, 126, 103, 0.16), transparent 36%);
+  pointer-events: none;
+}
+
+.auth-page.waymate-auth::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 55, 45, 0.08));
+  pointer-events: none;
+}
+
+.waymate-auth .auth-hero {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  padding: clamp(28px, 5vw, 64px);
+  pointer-events: none;
+}
+
+.waymate-auth .auth-brand {
+  position: static;
+  display: inline-flex;
+  width: min(500px, 100%);
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 42px rgba(0, 52, 43, 0.14);
+  backdrop-filter: blur(20px);
+  padding: 12px;
+  pointer-events: auto;
+}
+
+.waymate-auth .auth-brand .brand-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  padding: 3px;
+}
+
+.waymate-auth .auth-brand p {
+  color: #06493d;
+  font-size: clamp(1.7rem, 3vw, 2.45rem);
+  font-weight: 950;
+  line-height: 0.95;
+}
+
+.waymate-auth .auth-brand span {
+  color: rgba(6, 73, 61, 0.72);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.waymate-auth .auth-hero-copy {
+  display: block;
+  width: min(560px, 100%);
+  max-width: 560px;
+  margin: auto 0;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 20px 52px rgba(0, 52, 43, 0.14);
+  backdrop-filter: blur(18px);
+  padding: clamp(22px, 3.4vw, 34px);
+}
+
+.waymate-auth .auth-hero-copy .eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid rgba(7, 84, 68, 0.16);
+  border-radius: 999px;
+  background: rgba(7, 84, 68, 0.08);
+  color: #075444;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 9px 14px;
+  text-transform: uppercase;
+}
+
+.waymate-auth .auth-hero-copy h1 {
+  margin: 18px 0 14px;
+  color: #063f36;
+  font-size: clamp(2.25rem, 3.9vw, 4.2rem);
+  font-weight: 950;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.waymate-auth .auth-hero-copy p {
+  max-width: 560px;
+  margin: 0;
+  color: rgba(6, 49, 43, 0.82);
+  font-size: clamp(1rem, 1.18vw, 1.2rem);
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.waymate-auth .auth-visual-card {
+  display: none;
+}
+
+.waymate-auth .auth-panel-zone {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 100svh;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 5vw, 64px);
+}
+
+.auth-page.waymate-auth .auth-panel-zone {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42));
+}
+
+.waymate-auth .auth-card {
+  width: min(440px, calc(100vw - 32px));
+  min-height: 0;
+  max-height: calc(100svh - 64px);
+  gap: 13px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 26px 80px rgba(0, 52, 43, 0.2);
+  backdrop-filter: blur(24px);
+  padding: clamp(22px, 3vw, 30px);
+}
+
+.waymate-auth .auth-card-head {
+  margin-top: 16px;
+}
+
+.waymate-auth .auth-card-head h2 {
+  color: #10201d;
+  font-size: clamp(1.65rem, 2.3vw, 2.05rem);
+  line-height: 1.08;
+}
+
+.waymate-auth .auth-card-head p {
+  color: rgba(16, 32, 29, 0.66);
+  font-size: 0.96rem;
+}
+
+.waymate-auth .auth-switch {
+  order: -2;
+  min-height: 54px;
+  border-radius: 8px;
+  background: rgba(7, 84, 68, 0.08);
+  padding: 5px;
+}
+
+.waymate-auth .auth-switch button {
+  border-radius: 7px;
+  font-size: 0.96rem;
+  letter-spacing: 0;
+}
+
+.waymate-auth .auth-field > span {
+  color: #10201d;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.waymate-auth .auth-field > div {
+  min-height: 52px;
+  border-color: rgba(7, 84, 68, 0.18);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0 12px;
+}
+
+.waymate-auth .auth-field input {
+  font-size: 0.96rem;
+  padding-inline: 10px;
+}
+
+.waymate-auth .auth-options label,
+.waymate-auth .auth-options button {
+  font-size: 0.88rem;
+}
+
+.waymate-auth .auth-submit {
+  min-height: 54px;
+  background: linear-gradient(135deg, #007e67, #12a98b);
+  font-size: 1.05rem;
+  box-shadow: 0 14px 28px rgba(0, 126, 103, 0.24);
+}
+
+.waymate-auth .auth-divider {
+  margin-block: 8px 4px;
+}
+
+.waymate-auth .social-grid {
+  gap: 10px;
+}
+
+.waymate-auth .social-button {
+  min-height: 50px;
+  border-color: rgba(7, 84, 68, 0.18);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 0.92rem;
+}
+
+.auth-footer-links {
+  left: clamp(18px, 5vw, 64px);
+  bottom: 18px;
+  background: rgba(5, 57, 48, 0.58);
+}
+
+.waymate-auth .auth-theme-button,
+.waymate-auth .auth-language-button {
+  top: 22px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+@media (max-width: 980px) {
+  .auth-page.waymate-auth {
+    display: block;
+    min-height: 100svh;
+    overflow-y: auto;
+    background-position: center top;
+    background-size: 100vw auto;
+  }
+
+  .auth-page.waymate-auth::before {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.36) 34%, rgba(255, 255, 255, 0.82) 100%),
+      radial-gradient(circle at 50% 12%, rgba(254, 240, 186, 0.46), transparent 34%);
+  }
+
+  .waymate-auth .auth-hero {
+    display: none;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    min-height: 100svh;
+    flex-direction: column;
+    gap: 14px;
+    padding: 78px 16px 34px;
+  }
+
+  .auth-page.waymate-auth .auth-panel-zone {
+    background: transparent;
+  }
+
+  .waymate-auth .auth-mobile-brand {
+    display: flex;
+    width: min(440px, calc(100vw - 32px));
+    align-items: center;
+    gap: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.76);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 14px 34px rgba(0, 52, 43, 0.14);
+    backdrop-filter: blur(20px);
+    padding: 10px;
+  }
+
+  .waymate-auth .auth-mobile-brand p {
+    color: #06493d;
+    font-size: 1.28rem;
+    font-weight: 950;
+  }
+
+  .waymate-auth .auth-mobile-brand span {
+    color: rgba(6, 73, 61, 0.68);
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+
+  .waymate-auth .auth-card {
+    width: min(440px, calc(100vw - 32px));
+    max-height: none;
+    overflow: visible;
+    padding: 20px;
+  }
+
+  .auth-footer-links {
+    display: none;
+  }
+}
+
+/* Login polish requested by the user */
+.waymate-auth .auth-hero-copy {
+  width: min(640px, 100%);
+  max-width: 640px;
+  padding: clamp(22px, 3.2vw, 34px);
+}
+
+.waymate-auth .auth-hero-copy h1 {
+  margin-bottom: 0;
+  font-family: "Lora", Georgia, "Times New Roman", serif;
+  font-size: clamp(2.35rem, 3.15vw, 3.75rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  word-spacing: -0.06em;
+}
+
+.waymate-auth .auth-hero-copy h1 span {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.auth-page.waymate-auth,
+:root[data-theme="dark"] .auth-page.waymate-auth {
+  background-attachment: scroll;
+}
+
+.auth-page.waymate-auth::after,
+:root[data-theme="dark"] .auth-page.waymate-auth::after {
+  display: none;
+}
+
+.auth-page.waymate-auth .auth-panel-zone {
+  background: transparent;
+}
+
+.waymate-auth .auth-card-head {
+  margin-top: 10px;
+}
+
+.waymate-auth .auth-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.waymate-auth .auth-card-brand img {
+  display: block;
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  object-fit: contain;
+  padding: 3px;
+  box-shadow: 0 10px 22px rgba(0, 52, 43, 0.14);
+}
+
+.waymate-auth .auth-card-brand h2 {
+  margin: 0;
+  color: #06493d;
+  font-size: clamp(1.8rem, 2.7vw, 2.35rem);
+  line-height: 1;
+}
+
+.waymate-auth .auth-card-brand p {
+  margin: 5px 0 0;
+  color: rgba(16, 32, 29, 0.66);
+  font-size: 0.94rem;
+}
+
+:root[data-theme="dark"] .auth-page.waymate-auth {
+  background-color: #06120f;
+  background-blend-mode: multiply;
+}
+
+:root[data-theme="dark"] .auth-page.waymate-auth::before {
+  background:
+    linear-gradient(180deg, rgba(2, 17, 14, 0.78), rgba(2, 17, 14, 0.82)),
+    radial-gradient(circle at 20% 20%, rgba(67, 205, 182, 0.16), transparent 34%),
+    radial-gradient(circle at 70% 70%, rgba(240, 189, 103, 0.12), transparent 34%);
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-brand,
+:root[data-theme="dark"] .waymate-auth .auth-hero-copy,
+:root[data-theme="dark"] .waymate-auth .auth-card,
+:root[data-theme="dark"] .waymate-auth .auth-mobile-brand {
+  border-color: rgba(131, 234, 216, 0.18);
+  background: rgba(10, 25, 21, 0.82);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-brand p,
+:root[data-theme="dark"] .waymate-auth .auth-hero-copy h1,
+:root[data-theme="dark"] .waymate-auth .auth-card-brand h2,
+:root[data-theme="dark"] .waymate-auth .auth-field > span {
+  color: #eafff8;
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-brand span,
+:root[data-theme="dark"] .waymate-auth .auth-card-brand p,
+:root[data-theme="dark"] .waymate-auth .auth-card-head p,
+:root[data-theme="dark"] .waymate-auth .auth-options label {
+  color: rgba(234, 255, 248, 0.7);
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-hero-copy .eyebrow,
+:root[data-theme="dark"] .waymate-auth .auth-switch {
+  background: rgba(131, 234, 216, 0.11);
+  color: #83ead8;
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-switch button {
+  color: rgba(234, 255, 248, 0.64);
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-switch button.active {
+  background: rgba(234, 255, 248, 0.94);
+  color: #063f36;
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-field > div,
+:root[data-theme="dark"] .waymate-auth .social-button {
+  border-color: rgba(131, 234, 216, 0.2);
+  background: rgba(5, 18, 15, 0.72);
+  color: #eafff8;
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-field input {
+  color: #eafff8;
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-theme-button,
+:root[data-theme="dark"] .waymate-auth .auth-language-button {
+  background: rgba(10, 25, 21, 0.9);
+  color: #eafff8;
 }
