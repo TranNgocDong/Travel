@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { FormEvent, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AuthScreen } from "@/components/AuthScreen";
 import {
   addTripMember,
   createExpense,
@@ -47,8 +48,6 @@ import {
   fetchTripMembers,
   fetchTrips,
   getCurrentFirebaseUser,
-  login,
-  loginWithGoogle,
   logout,
   planRoute,
   removeTripMember,
@@ -179,9 +178,6 @@ export function ExpensePlanner() {
   const [locationShareStatus, setLocationShareStatus] = useState<LocationShareStatus>("idle");
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [newTripTitle, setNewTripTitle] = useState("");
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberEmail, setNewMemberEmail] = useState("");
@@ -836,35 +832,6 @@ export function ExpensePlanner() {
     }
   }
 
-  async function handleLogin(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsLoggingIn(true);
-    setApiError(null);
-
-    try {
-      const user = await login(loginEmail, loginPassword);
-      setCurrentUser(user);
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Đăng nhập thất bại");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  }
-
-  async function handleGoogleLogin() {
-    setIsLoggingIn(true);
-    setApiError(null);
-
-    try {
-      const user = await loginWithGoogle();
-      setCurrentUser(user);
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Đăng nhập Google thất bại");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  }
-
   function handleRouteOriginChange(value: string) {
     routeFormDirtyRef.current = true;
     setRouteOrigin(value);
@@ -1258,67 +1225,7 @@ export function ExpensePlanner() {
   }
 
   if (!currentUser) {
-    return (
-      <main className="app-shell auth-shell">
-        <header className="top-bar">
-          <div className="brand-mark" aria-hidden="true">
-            <Bike size={20} />
-          </div>
-          <div className="brand-copy">
-            <p>TrailLedger</p>
-            <span>Không gian chuyến đi bảo mật</span>
-          </div>
-          <button className="icon-button" type="button" title="Đổi giao diện" aria-label="Đổi giao diện" onClick={toggleTheme}>
-            {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
-          </button>
-        </header>
-
-        <form className="expense-panel auth-panel" onSubmit={handleLogin}>
-          <div className="panel-heading">
-            <div>
-              <span className="eyebrow">Bảo mật</span>
-              <h1>Đăng nhập</h1>
-            </div>
-            <ShieldCheck size={24} />
-          </div>
-
-          {apiError && (
-            <div className="api-alert" role="alert">
-              {apiError}
-            </div>
-          )}
-
-          <label className="field">
-            <span>Email</span>
-            <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="you@example.com" />
-          </label>
-
-          <label className="field auth-password">
-            <span>Mật khẩu</span>
-            <input
-              type="password"
-              value={loginPassword}
-              onChange={(event) => setLoginPassword(event.target.value)}
-              placeholder="Mật khẩu Firebase"
-            />
-          </label>
-
-          <button className="auth-submit" type="submit" disabled={isLoggingIn}>
-            {isLoggingIn ? "Đang vào..." : "Đăng nhập"}
-          </button>
-
-          <button className="google-submit" type="button" disabled={isLoggingIn} onClick={handleGoogleLogin}>
-            <span aria-hidden="true">G</span>
-            Đăng nhập với Google
-          </button>
-
-          <div className="rate-note">
-            <ShieldCheck size={16} />
-            <span>Email/mật khẩu cần tạo user trước. Google chỉ cần bật provider trong Firebase Console.</span>
-          </div>
-        </form>
-      </main>
-    );
+    return <AuthScreen theme={theme} onAuthenticated={setCurrentUser} onThemeToggle={toggleTheme} />;
   }
 
   return (

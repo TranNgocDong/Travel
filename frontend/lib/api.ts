@@ -1,4 +1,18 @@
-import { GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, type User } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  OAuthProvider,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+  type User,
+} from "firebase/auth";
 
 import { getFirebaseAuth } from "./firebase";
 import type { CurrencyCode } from "./settlements";
@@ -9,6 +23,9 @@ export const tripId = defaultTripId;
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV === "production" ? "https://travel-4bm4.onrender.com/api/v1" : "http://localhost:4000/api/v1");
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
+const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
 
 let currentFirebaseUser: User | null = null;
 let authReadyPromise: Promise<User | null> | null = null;
@@ -245,14 +262,44 @@ export async function getCurrentFirebaseUser(): Promise<User | null> {
   return authReadyPromise;
 }
 
-export async function login(email: string, password: string): Promise<ApiUser> {
-  await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+export async function login(email: string, password: string, remember = false): Promise<ApiUser> {
+  const firebaseAuth = getFirebaseAuth();
+  // Security: choose Firebase's managed session persistence instead of writing ID tokens to localStorage ourselves.
+  await setPersistence(firebaseAuth, remember ? browserLocalPersistence : browserSessionPersistence);
+  await signInWithEmailAndPassword(firebaseAuth, email, password);
   return fetchMe();
 }
 
-export async function loginWithGoogle(): Promise<ApiUser> {
-  await signInWithPopup(getFirebaseAuth(), googleProvider);
+export async function registerWithEmail(payload: { displayName: string; email: string; password: string; remember?: boolean }): Promise<ApiUser> {
+  const firebaseAuth = getFirebaseAuth();
+  // Security: persistence is set before account creation so the session lifetime is explicit.
+  await setPersistence(firebaseAuth, payload.remember ? browserLocalPersistence : browserSessionPersistence);
+  const credential = await createUserWithEmailAndPassword(firebaseAuth, payload.email, payload.password);
+  await updateProfile(credential.user, {
+    displayName: payload.displayName,
+  });
+  await credential.user.getIdToken(true);
   return fetchMe();
+}
+
+export async function loginWithGoogle(remember = false): Promise<ApiUser> {
+  const firebaseAuth = getFirebaseAuth();
+  // Security: do not copy OAuth/Firebase tokens into browser storage; the SDK handles refresh safely.
+  await setPersistence(firebaseAuth, remember ? browserLocalPersistence : browserSessionPersistence);
+  await signInWithPopup(firebaseAuth, googleProvider);
+  return fetchMe();
+}
+
+export async function loginWithApple(remember = false): Promise<ApiUser> {
+  const firebaseAuth = getFirebaseAuth();
+  // Security: Apple provider must be enabled in Firebase Console; failed provider setup is surfaced as a normal auth error.
+  await setPersistence(firebaseAuth, remember ? browserLocalPersistence : browserSessionPersistence);
+  await signInWithPopup(firebaseAuth, appleProvider);
+  return fetchMe();
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(getFirebaseAuth(), email);
 }
 
 export async function logout(): Promise<void> {
@@ -534,6 +581,7 @@ async function authedFetch(input: RequestInfo | URL, init: RequestInit = {}): Pr
     credentials: "include",
     headers: {
       ...Object.fromEntries(new Headers(init.headers).entries()),
+      // Security: the ID token is attached in memory per request. We never manually persist this bearer token in localStorage.
       Authorization: `Bearer ${token}`,
     },
   });
