@@ -213,17 +213,19 @@ export function ExpensePlanner() {
   const chatMessageListRef = useRef<HTMLDivElement | null>(null);
 
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
+    const safeRoutePlan = normalizeRoutePlan(nextRoutePlan);
+
     routeFormDirtyRef.current = false;
-    setRoutePlan(nextRoutePlan);
-    setRouteOrigin(nextRoutePlan.origin);
+    setRoutePlan(safeRoutePlan);
+    setRouteOrigin(safeRoutePlan.origin);
     setRouteOriginCoordinate(null);
-    setRouteDestination(nextRoutePlan.destination);
+    setRouteDestination(safeRoutePlan.destination);
     setFocusedLocationRequest(null);
     setOfflineReady(true);
     setIsUsingOfflineRoute(Boolean(options.fromCache));
 
     if (options.cache !== false) {
-      writeCachedRoutePlan(nextRoutePlan, options.tripId ?? selectedTripId);
+      writeCachedRoutePlan(safeRoutePlan, options.tripId ?? selectedTripId);
     }
   }
 
@@ -309,7 +311,7 @@ export function ExpensePlanner() {
       if (canUpdateRouteForm) {
         applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
       } else {
-        writeCachedRoutePlan(nextRoutePlan, selectedTripId);
+        writeCachedRoutePlan(normalizeRoutePlan(nextRoutePlan), selectedTripId);
       }
       setLastSyncedAt(new Date());
     } catch (error) {
@@ -3650,7 +3652,7 @@ function readCachedRoutePlan(activeTripId: string): ApiRoutePlan | null {
 
   try {
     const parsed = JSON.parse(raw) as { routePlan?: unknown };
-    return isCachedRoutePlan(parsed.routePlan) ? parsed.routePlan : null;
+    return isCachedRoutePlan(parsed.routePlan) ? normalizeRoutePlan(parsed.routePlan) : null;
   } catch {
     return null;
   }
@@ -3661,11 +3663,13 @@ function writeCachedRoutePlan(routePlan: ApiRoutePlan, activeTripId: string) {
     return;
   }
 
+  const safeRoutePlan = normalizeRoutePlan(routePlan);
+
   window.localStorage.setItem(
     routePlanCacheKey(activeTripId),
     JSON.stringify({
       cachedAt: new Date().toISOString(),
-      routePlan,
+      routePlan: safeRoutePlan,
     }),
   );
 }
@@ -3692,6 +3696,103 @@ function isCachedRoutePlan(value: unknown): value is ApiRoutePlan {
     Array.isArray(routePlan.geometry) &&
     Array.isArray(routePlan.waypoints)
   );
+}
+
+function normalizeRoutePlan(value: ApiRoutePlan): ApiRoutePlan {
+  const routePlan = value as Partial<ApiRoutePlan>;
+  const waypoints = Array.isArray(routePlan.waypoints) ? routePlan.waypoints.map(normalizeRouteWaypoint).filter((waypoint): waypoint is ApiRouteWaypoint => waypoint !== null) : [];
+  const geometry = Array.isArray(routePlan.geometry) ? routePlan.geometry.filter(isGeoPoint) : waypoints.map((waypoint) => waypoint.coordinate);
+  const offlinePack = routePlan.offlinePack as Partial<ApiRoutePlan["offlinePack"]> | undefined;
+  const summary = routePlan.summary as Partial<ApiRoutePlan["summary"]> | undefined;
+  const suggestedStops = safeNumber(summary?.suggestedStops, waypoints.filter((waypoint) => waypoint.stop).length);
+  const weatherAlerts = safeNumber(summary?.weatherAlerts, waypoints.filter((waypoint) => waypoint.weather.riskLevel !== "low").length);
+  const borderAlerts = safeNumber(summary?.borderAlerts, waypoints.reduce((count, waypoint) => count + waypoint.borderChecklist.length, 0));
+  const nextCriticalStop =
+    typeof summary?.nextCriticalStop === "string"
+      ? summary.nextCriticalStop
+      : waypoints.find((waypoint) => waypoint.weather.riskLevel !== "low" || waypoint.stop?.priority === "required")?.name ?? null;
+
+  return {
+    tripId: typeof routePlan.tripId === "string" ? routePlan.tripId : "",
+    provider: routePlan.provider === "osm" ? "osm" : "starter",
+    title: typeof routePlan.title === "string" ? routePlan.title : "Tuyến đường",
+    origin: typeof routePlan.origin === "string" ? routePlan.origin : "",
+    destination: typeof routePlan.destination === "string" ? routePlan.destination : "",
+    totalDistanceKm: safeNumber(routePlan.totalDistanceKm, 0),
+    durationMinutes: safeNumber(routePlan.durationMinutes, 0),
+    generatedAt: typeof routePlan.generatedAt === "string" ? routePlan.generatedAt : new Date().toISOString(),
+    geometry,
+    offlinePack: {
+      status: "ready",
+      mapTilesMb: safeNumber(offlinePack?.mapTilesMb, Math.max(8, Math.ceil(Math.max(geometry.length, waypoints.length) / 20))),
+      expiresInHours: safeNumber(offlinePack?.expiresInHours, 72),
+    },
+    summary: {
+      suggestedStops,
+      weatherAlerts,
+      borderAlerts,
+      nextCriticalStop,
+    },
+    waypoints,
+  };
+}
+
+function normalizeRouteWaypoint(value: ApiRouteWaypoint): ApiRouteWaypoint | null {
+  const waypoint = value as Partial<ApiRouteWaypoint>;
+
+  if (!isGeoPoint(waypoint.coordinate)) {
+    return null;
+  }
+
+  const weather = waypoint.weather as Partial<ApiRouteWaypoint["weather"]> | undefined;
+  const stop = waypoint.stop as Partial<NonNullable<ApiRouteWaypoint["stop"]>> | null | undefined;
+
+  return {
+    id: typeof waypoint.id === "string" ? waypoint.id : `${waypoint.coordinate.lat},${waypoint.coordinate.lng}`,
+    name: typeof waypoint.name === "string" ? waypoint.name : "Điểm dừng",
+    province: typeof waypoint.province === "string" ? waypoint.province : "",
+    distanceFromStartKm: safeNumber(waypoint.distanceFromStartKm, 0),
+    eta: typeof waypoint.eta === "string" ? waypoint.eta : "--:--",
+    coordinate: waypoint.coordinate,
+    roadNote: typeof waypoint.roadNote === "string" ? waypoint.roadNote : "",
+    weather: {
+      condition: typeof weather?.condition === "string" ? weather.condition : "Không rõ",
+      tempC: safeNumber(weather?.tempC, 0),
+      rainChance: safeNumber(weather?.rainChance, 0),
+      windKph: safeNumber(weather?.windKph, 0),
+      riskLevel: weather?.riskLevel === "medium" || weather?.riskLevel === "high" ? weather.riskLevel : "low",
+      advisory: typeof weather?.advisory === "string" ? weather.advisory : "Chưa có cảnh báo thời tiết.",
+      source: weather?.source === "open-meteo" || weather?.source === "fallback" || weather?.source === "starter" ? weather.source : "fallback",
+      observedAt: typeof weather?.observedAt === "string" ? weather.observedAt : undefined,
+      precipitationMm: typeof weather?.precipitationMm === "number" ? weather.precipitationMm : undefined,
+    },
+    stop:
+      stop && typeof stop.label === "string"
+        ? {
+            kind: isRouteStopKind(stop.kind) ? stop.kind : "rest",
+            label: stop.label,
+            priority: stop.priority === "required" || stop.priority === "recommended" ? stop.priority : "optional",
+          }
+        : null,
+    borderChecklist: Array.isArray(waypoint.borderChecklist) ? waypoint.borderChecklist.filter((item): item is string => typeof item === "string") : [],
+  };
+}
+
+function isGeoPoint(value: unknown): value is ApiGeoPoint {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const point = value as Partial<ApiGeoPoint>;
+  return typeof point.lat === "number" && Number.isFinite(point.lat) && typeof point.lng === "number" && Number.isFinite(point.lng);
+}
+
+function isRouteStopKind(value: unknown): value is ApiRouteStopKind {
+  return value === "fuel" || value === "rest" || value === "repair" || value === "border";
+}
+
+function safeNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function getCurrentBrowserPosition(): Promise<GeolocationPosition> {
