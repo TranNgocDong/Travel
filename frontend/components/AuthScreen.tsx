@@ -14,6 +14,41 @@ type AuthScreenProps = {
   onThemeToggle: () => void;
 };
 
+function getLoginErrorMessage(error: unknown, mode: AuthMode): string {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
+  const message = error instanceof Error ? error.message : "";
+
+  if (mode === "register") {
+    if (code.includes("email-already-in-use")) {
+      return "Email này đã có tài khoản. Hãy chuyển sang Đăng nhập.";
+    }
+
+    if (code.includes("weak-password")) {
+      return "Mật khẩu chưa đủ mạnh. Cần ít nhất 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.";
+    }
+
+    return "Không đăng ký được. Kiểm tra lại thông tin hoặc thử email khác.";
+  }
+
+  if (code.includes("user-not-found") || code.includes("invalid-credential")) {
+    return "Email hoặc mật khẩu chưa đúng. Nếu chưa có tài khoản, hãy bấm Đăng ký trước.";
+  }
+
+  if (code.includes("wrong-password")) {
+    return "Mật khẩu chưa đúng. Hãy nhập lại hoặc dùng Quên mật khẩu.";
+  }
+
+  if (code.includes("too-many-requests")) {
+    return "Bạn thử đăng nhập quá nhiều lần. Chờ một lát rồi thử lại.";
+  }
+
+  if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
+    return "Firebase đăng nhập được nhưng chưa kết nối được backend. Kiểm tra API server/Render.";
+  }
+
+  return "Đăng nhập thất bại. Kiểm tra lại email hoặc mật khẩu.";
+}
+
 export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreenProps) {
   const [mode, setMode] = useState<AuthMode>("login");
   const [displayName, setDisplayName] = useState("");
@@ -132,9 +167,9 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
 
       resetFailedAttempts();
       setPendingMfaUser(user);
-    } catch {
+    } catch (error) {
       registerFailedAttempt();
-      setAuthError(mode === "register" ? "Không đăng ký được. Kiểm tra lại thông tin hoặc thử email khác." : "Đăng nhập thất bại. Kiểm tra lại email hoặc mật khẩu.");
+      setAuthError(getLoginErrorMessage(error, mode));
     } finally {
       setIsSubmitting(false);
     }

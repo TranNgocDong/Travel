@@ -3375,9 +3375,8 @@ body {
 }
 
 .top-bar {
-  position: sticky;
-  top: 12px;
-  z-index: 950;
+  position: relative;
+  z-index: 20;
   margin-bottom: 14px;
   border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
   border-radius: 8px;
