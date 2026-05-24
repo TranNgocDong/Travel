@@ -42,7 +42,6 @@ import {
   deleteTripMapMarker,
   fetchExpenses,
   fetchMemberLocationAddress,
-  fetchMe,
   fetchRoutePlan,
   fetchTripMessages,
   fetchTripLocations,
@@ -52,7 +51,6 @@ import {
   fetchSettlementResult,
   fetchTripMembers,
   fetchTrips,
-  getCurrentFirebaseUser,
   logout,
   planRoute,
   removeTripMember,
@@ -439,21 +437,9 @@ export function ExpensePlanner() {
   }, []);
 
   useEffect(() => {
-    void getCurrentFirebaseUser().then((firebaseUser) => {
-      if (!firebaseUser) {
-        setIsLoading(false);
-        return;
-      }
-
-      void fetchMe()
-        .then((user) => {
-          setCurrentUser(user);
-        })
-        .catch(() => {
-          setCurrentUser(null);
-          setIsLoading(false);
-        });
-    });
+    // Keep the login screen as the explicit gate. Firebase may remember a browser session,
+    // but the app should only enter after the user clicks email or Google login.
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
