@@ -15,7 +15,9 @@ import {
   Fuel,
   Map,
   MapPin,
+  Maximize2,
   MessageCircle,
+  Minimize2,
   Moon,
   Navigation,
   Plus,
@@ -2565,6 +2567,28 @@ function RouteIntelligence({
   pendingMapMarker: ApiGeoPoint | null;
   routePlan: ApiRoutePlan;
 }) {
+  const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isMapFullscreen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMapFullscreen(false);
+      }
+    };
+
+    document.body.classList.add("map-fullscreen-active");
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.classList.remove("map-fullscreen-active");
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMapFullscreen]);
+
   return (
     <section className="route-intel" aria-label="Lộ trình và thời tiết">
       <div className="panel-heading">
@@ -2598,10 +2622,20 @@ function RouteIntelligence({
       </form>
 
       <div className="route-intel-grid">
-        <div className="route-map-panel">
+        <div className={isMapFullscreen ? "route-map-panel map-fullscreen" : "route-map-panel"}>
+          <button
+            className="map-fullscreen-button"
+            type="button"
+            aria-label={isMapFullscreen ? "Thu nhỏ bản đồ" : "Phóng to bản đồ"}
+            onClick={() => setIsMapFullscreen((current) => !current)}
+          >
+            {isMapFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            <span>{isMapFullscreen ? "Thu nhỏ" : "Toàn màn hình"}</span>
+          </button>
           <OpenStreetRouteMap
             currentUserId={currentUserId}
             focusedLocationRequest={focusedLocationRequest}
+            isFullscreen={isMapFullscreen}
             isPlacingMapMarker={isPlacingMapMarker}
             mapMarkers={mapMarkers}
             memberLocations={memberLocations}
@@ -2801,6 +2835,7 @@ function RouteIntelligence({
 function OpenStreetRouteMap({
   currentUserId,
   focusedLocationRequest,
+  isFullscreen,
   isPlacingMapMarker,
   mapMarkers,
   memberLocations,
@@ -2811,6 +2846,7 @@ function OpenStreetRouteMap({
 }: {
   currentUserId: string;
   focusedLocationRequest: FocusedLocationRequest | null;
+  isFullscreen: boolean;
   isPlacingMapMarker: boolean;
   mapMarkers: ApiMapMarker[];
   memberLocations: ApiMemberLocation[];
@@ -2831,6 +2867,20 @@ function OpenStreetRouteMap({
   const [status, setStatus] = useState<LeafletMapStatus>("loading");
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationWatchStatus>("idle");
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (!map) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      map.invalidateSize();
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [isFullscreen]);
 
   const clearUserLocationLayer = useCallback(() => {
     userMarkerRef.current?.remove();

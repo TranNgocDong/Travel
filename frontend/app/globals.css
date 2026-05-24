@@ -886,9 +886,106 @@ button {
 }
 
 .route-map-panel {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 10px;
+}
+
+.map-fullscreen-active {
+  overflow: hidden;
+}
+
+.route-map-panel.map-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  background: #08140f;
+  padding: 0;
+}
+
+.route-map-panel.map-fullscreen .osm-map-shell {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+.route-map-panel.map-fullscreen .route-map-head {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 540;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(4, 25, 18, 0.82);
+  color: #ffffff;
+  padding: 10px 12px;
+  backdrop-filter: blur(18px);
+}
+
+.route-map-panel.map-fullscreen .route-map-head strong {
+  color: #b9f4e5;
+}
+
+.route-map-panel.map-fullscreen .route-alerts {
+  display: none;
+}
+
+.map-fullscreen-button {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 560;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 950;
+  gap: 8px;
+  padding: 0 13px;
+  backdrop-filter: blur(16px);
+}
+
+.route-map-panel .osm-map-controls {
+  top: 62px;
+}
+
+.route-map-panel.map-fullscreen .map-fullscreen-button {
+  top: calc(14px + env(safe-area-inset-top));
+  right: calc(14px + env(safe-area-inset-right));
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(4, 25, 18, 0.84);
+  color: #ffffff;
+}
+
+.app-shell[data-active-tab="route"] .route-map-panel.map-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.app-shell[data-active-tab="route"] .route-map-panel.map-fullscreen .osm-map-shell {
+  height: 100dvh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
 }
 
 .route-side-stack {
