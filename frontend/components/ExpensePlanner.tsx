@@ -203,6 +203,7 @@ export function ExpensePlanner() {
   const [locationShareStatus, setLocationShareStatus] = useState<LocationShareStatus>("idle");
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
+  const [showEntryAnimation, setShowEntryAnimation] = useState(false);
   const [newTripTitle, setNewTripTitle] = useState("");
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberEmail, setNewMemberEmail] = useState("");
@@ -486,6 +487,20 @@ export function ExpensePlanner() {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setShowEntryAnimation(false);
+      return;
+    }
+
+    setShowEntryAnimation(true);
+    const entryTimer = window.setTimeout(() => setShowEntryAnimation(false), 1800);
+
+    return () => {
+      window.clearTimeout(entryTimer);
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1464,6 +1479,24 @@ export function ExpensePlanner() {
 
   return (
     <main className="app-shell" data-active-tab={activeTab}>
+      {showEntryAnimation && (
+        <div className="entry-animation" role="status" aria-live="polite">
+          <div className="entry-card">
+            <div className="entry-compass">
+              <img src="/trailledger-logo.png" alt="" />
+              <Navigation size={24} />
+            </div>
+            <div className="entry-route" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <p>TrailLedger</p>
+            <strong>Đang mở chuyến đi...</strong>
+          </div>
+        </div>
+      )}
+
       <div className="app-backdrop" aria-hidden="true">
         <span className="backdrop-route one" />
         <span className="backdrop-route two" />
