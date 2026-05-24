@@ -144,6 +144,8 @@ export function ExpensePlanner() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeTab, setActiveTab] = useState<MobileTab>("route");
   const [isAppRailOpen, setIsAppRailOpen] = useState(false);
+  const [isAppRailMinimized, setIsAppRailMinimized] = useState(false);
+  const [appRailSide, setAppRailSide] = useState<"left" | "right">("left");
   const [expenses, setExpenses] = useState<ApiExpense[]>([]);
   const [members, setMembers] = useState<TripMemberView[]>([]);
   const [trips, setTrips] = useState<ApiTrip[]>([]);
@@ -1411,6 +1413,26 @@ export function ExpensePlanner() {
   function handleSelectTab(tab: MobileTab) {
     setActiveTab(tab);
     setIsAppRailOpen(false);
+    setIsAppRailMinimized(false);
+  }
+
+  function handleToggleAppRail() {
+    if (isAppRailMinimized) {
+      setIsAppRailMinimized(false);
+      setIsAppRailOpen(true);
+      return;
+    }
+
+    setIsAppRailOpen((current) => !current);
+  }
+
+  function handleMinimizeAppRail() {
+    setIsAppRailOpen(false);
+    setIsAppRailMinimized(true);
+  }
+
+  function handleMoveAppRail() {
+    setAppRailSide((current) => (current === "left" ? "right" : "left"));
   }
 
   async function handleLogout() {
@@ -1582,16 +1604,16 @@ export function ExpensePlanner() {
         />
       </section>
 
-      <div className={isAppRailOpen ? "app-nav-rail open" : "app-nav-rail"}>
+      <div className={appNavRailClass(isAppRailOpen, isAppRailMinimized, appRailSide)}>
         <button
           className="app-nav-toggle"
           type="button"
-          aria-expanded={isAppRailOpen}
-          aria-label={isAppRailOpen ? "Ẩn thanh chức năng" : "Hiện thanh chức năng"}
-          onClick={() => setIsAppRailOpen((current) => !current)}
+          aria-expanded={isAppRailOpen && !isAppRailMinimized}
+          aria-label={isAppRailMinimized ? "Hiện thanh chức năng" : isAppRailOpen ? "Ẩn thanh chức năng" : "Hiện thanh chức năng"}
+          onClick={handleToggleAppRail}
         >
-          {isAppRailOpen ? <X size={18} /> : <Map size={18} />}
-          <span>{isAppRailOpen ? "Ẩn" : navTabLabel(activeTab)}</span>
+          {isAppRailOpen && !isAppRailMinimized ? <X size={18} /> : <Map size={18} />}
+          <span>{isAppRailOpen && !isAppRailMinimized ? "Ẩn" : navTabLabel(activeTab)}</span>
         </button>
 
         <nav className="mobile-tabs app-tabs" aria-label="Chuyển màn hình">
@@ -1612,6 +1634,17 @@ export function ExpensePlanner() {
             <span>Tổng kết</span>
           </button>
         </nav>
+
+        <div className="app-nav-tools" aria-label="Tùy chỉnh thanh chức năng">
+          <button type="button" onClick={handleMoveAppRail}>
+            <ArrowRightLeft size={15} />
+            <span>Đổi bên</span>
+          </button>
+          <button type="button" onClick={handleMinimizeAppRail}>
+            <X size={15} />
+            <span>Thu nhỏ</span>
+          </button>
+        </div>
       </div>
 
       {apiError && (
@@ -3415,6 +3448,17 @@ function navTabLabel(tab: MobileTab): string {
   }
 
   return "Bản đồ";
+}
+
+function appNavRailClass(isOpen: boolean, isMinimized: boolean, side: "left" | "right"): string {
+  return [
+    "app-nav-rail",
+    isOpen && !isMinimized ? "open" : "",
+    isMinimized ? "minimized" : "",
+    side === "right" ? "side-right" : "side-left",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function buildSplitPayload(splitMode: SplitMode, selectedMemberIds: string[], values: Record<string, string>): ApiExpenseSplit {
