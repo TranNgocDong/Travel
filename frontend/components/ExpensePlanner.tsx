@@ -143,6 +143,7 @@ const locationShareIntervalMs = 15_000;
 export function ExpensePlanner() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeTab, setActiveTab] = useState<MobileTab>("route");
+  const [isAppRailOpen, setIsAppRailOpen] = useState(false);
   const [expenses, setExpenses] = useState<ApiExpense[]>([]);
   const [members, setMembers] = useState<TripMemberView[]>([]);
   const [trips, setTrips] = useState<ApiTrip[]>([]);
@@ -1407,6 +1408,11 @@ export function ExpensePlanner() {
     void loadTripData({ silent: true });
   }
 
+  function handleSelectTab(tab: MobileTab) {
+    setActiveTab(tab);
+    setIsAppRailOpen(false);
+  }
+
   async function handleLogout() {
     await handleStopSharingLocation();
     await logout();
@@ -1576,24 +1582,37 @@ export function ExpensePlanner() {
         />
       </section>
 
-      <nav className="mobile-tabs app-tabs" aria-label="Chuyển màn hình">
-        <button className={tabButtonClass(activeTab, "route")} type="button" onClick={() => setActiveTab("route")}>
-          <Map size={17} />
-          <span>Bản đồ</span>
+      <div className={isAppRailOpen ? "app-nav-rail open" : "app-nav-rail"}>
+        <button
+          className="app-nav-toggle"
+          type="button"
+          aria-expanded={isAppRailOpen}
+          aria-label={isAppRailOpen ? "Ẩn thanh chức năng" : "Hiện thanh chức năng"}
+          onClick={() => setIsAppRailOpen((current) => !current)}
+        >
+          {isAppRailOpen ? <X size={18} /> : <Map size={18} />}
+          <span>{isAppRailOpen ? "Ẩn" : navTabLabel(activeTab)}</span>
         </button>
-        <button className={tabButtonClass(activeTab, "expenses")} type="button" onClick={() => setActiveTab("expenses")}>
-          <WalletCards size={17} />
-          <span>Chi phí</span>
-        </button>
-        <button className={tabButtonClass(activeTab, "group")} type="button" onClick={() => setActiveTab("group")}>
-          <Users size={17} />
-          <span>Nhóm</span>
-        </button>
-        <button className={tabButtonClass(activeTab, "recap")} type="button" onClick={() => setActiveTab("recap")}>
-          <Archive size={17} />
-          <span>Tổng kết</span>
-        </button>
-      </nav>
+
+        <nav className="mobile-tabs app-tabs" aria-label="Chuyển màn hình">
+          <button className={tabButtonClass(activeTab, "route")} type="button" onClick={() => handleSelectTab("route")}>
+            <Map size={17} />
+            <span>Bản đồ</span>
+          </button>
+          <button className={tabButtonClass(activeTab, "expenses")} type="button" onClick={() => handleSelectTab("expenses")}>
+            <WalletCards size={17} />
+            <span>Chi phí</span>
+          </button>
+          <button className={tabButtonClass(activeTab, "group")} type="button" onClick={() => handleSelectTab("group")}>
+            <Users size={17} />
+            <span>Nhóm</span>
+          </button>
+          <button className={tabButtonClass(activeTab, "recap")} type="button" onClick={() => handleSelectTab("recap")}>
+            <Archive size={17} />
+            <span>Tổng kết</span>
+          </button>
+        </nav>
+      </div>
 
       {apiError && (
         <div className="api-alert" role="alert">
@@ -3380,6 +3399,22 @@ function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
 
 function tabButtonClass(activeTab: MobileTab, tab: MobileTab): string {
   return activeTab === tab ? "active" : "";
+}
+
+function navTabLabel(tab: MobileTab): string {
+  if (tab === "expenses") {
+    return "Chi phí";
+  }
+
+  if (tab === "group") {
+    return "Nhóm";
+  }
+
+  if (tab === "recap") {
+    return "Tổng kết";
+  }
+
+  return "Bản đồ";
 }
 
 function buildSplitPayload(splitMode: SplitMode, selectedMemberIds: string[], values: Record<string, string>): ApiExpenseSplit {
