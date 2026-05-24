@@ -4,6 +4,7 @@ import { Check, Compass, Eye, EyeOff, Globe2, KeyRound, Languages, LockKeyhole, 
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 
 import { login, loginWithApple, loginWithGoogle, registerWithEmail, requestPasswordReset, type ApiUser } from "@/lib/api";
+import { setAutoEnterApp } from "@/lib/authPreferences";
 import { analyzePassword, sanitizeAuthText, validateDisplayName, validateEmail, validateOtp, validatePassword } from "@/lib/authValidation";
 
 type AuthMode = "login" | "register";
@@ -67,6 +68,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   const [authError, setAuthError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
   const [pendingMfaUser, setPendingMfaUser] = useState<ApiUser | null>(null);
+  const [pendingAutoEnterApp, setPendingAutoEnterApp] = useState(false);
   const [otp, setOtp] = useState("");
 
   const passwordStrength = useMemo(() => analyzePassword(password), [password]);
@@ -166,6 +168,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           : await login(safeEmail.ok ? safeEmail.value : "", password, rememberMe);
 
       resetFailedAttempts();
+      setPendingAutoEnterApp(rememberMe);
       setPendingMfaUser(user);
     } catch (error) {
       registerFailedAttempt();
@@ -192,6 +195,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
     try {
       const user = provider === "google" ? await loginWithGoogle(rememberMe) : await loginWithApple(rememberMe);
       resetFailedAttempts();
+      setPendingAutoEnterApp(rememberMe);
       setPendingMfaUser(user);
     } catch {
       registerFailedAttempt();
@@ -233,8 +237,10 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
 
     if (pendingMfaUser) {
       // Security: this is the UI handoff point for real Firebase MFA/backend OTP verification in production.
+      setAutoEnterApp(pendingAutoEnterApp);
       onAuthenticated(pendingMfaUser);
       setPendingMfaUser(null);
+      setPendingAutoEnterApp(false);
       setOtp("");
       setAuthError(null);
     }
@@ -405,7 +411,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           <div className="auth-options">
             <label>
               <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
-              <span>Ghi nhớ đăng nhập</span>
+              <span>Ghi nhớ và tự vào lần sau</span>
             </label>
             {mode === "login" && (
               <button type="button" onClick={handlePasswordReset}>

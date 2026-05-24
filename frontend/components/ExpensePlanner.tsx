@@ -42,6 +42,7 @@ import {
   deleteTripMapMarker,
   fetchExpenses,
   fetchMemberLocationAddress,
+  fetchMe,
   fetchRoutePlan,
   fetchTripMessages,
   fetchTripLocations,
@@ -51,6 +52,7 @@ import {
   fetchSettlementResult,
   fetchTripMembers,
   fetchTrips,
+  getCurrentFirebaseUser,
   logout,
   planRoute,
   removeTripMember,
@@ -84,6 +86,7 @@ import {
   type ApiTripStatus,
   type ApiUser,
 } from "@/lib/api";
+import { clearAutoEnterApp, shouldAutoEnterApp } from "@/lib/authPreferences";
 import { currencyRatesToVnd, formatMoney, type CurrencyCode, type Member, type SplitMode, toVnd } from "@/lib/settlements";
 
 type TripMemberView = Member & {
@@ -437,9 +440,51 @@ export function ExpensePlanner() {
   }, []);
 
   useEffect(() => {
-    // Keep the login screen as the explicit gate. Firebase may remember a browser session,
-    // but the app should only enter after the user clicks email or Google login.
-    setIsLoading(false);
+    let mounted = true;
+
+    if (!shouldAutoEnterApp()) {
+      setIsLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    void getCurrentFirebaseUser()
+      .then((firebaseUser) => {
+        if (!mounted) {
+          return;
+        }
+
+        if (!firebaseUser) {
+          clearAutoEnterApp();
+          setIsLoading(false);
+          return;
+        }
+
+        void fetchMe()
+          .then((user) => {
+            if (mounted) {
+              setCurrentUser(user);
+            }
+          })
+          .catch(() => {
+            if (mounted) {
+              clearAutoEnterApp();
+              setCurrentUser(null);
+              setIsLoading(false);
+            }
+          });
+      })
+      .catch(() => {
+        if (mounted) {
+          clearAutoEnterApp();
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -1350,6 +1395,7 @@ export function ExpensePlanner() {
   async function handleLogout() {
     await handleStopSharingLocation();
     await logout();
+    clearAutoEnterApp();
     setCurrentUser(null);
     setTrips([]);
     setExpenses([]);
