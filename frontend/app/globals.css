@@ -3677,6 +3677,19 @@ body {
   background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--forest) 78%, #000));
 }
 
+/* Travel Cockpit: map-first app shell */
+.app-shell[data-active-tab="route"] .route-intel {
+  overflow: hidden;
+}
+
+.app-shell[data-active-tab="route"] .route-map-panel {
+  padding: 8px;
+}
+
+.app-shell[data-active-tab="route"] .route-alerts {
+  padding-inline: 2px;
+}
+
 @media (min-width: 720px) {
   .auth-page.waymate-auth {
     grid-template-columns: minmax(430px, 1fr) minmax(430px, 0.82fr);
@@ -3718,8 +3731,8 @@ body {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .route-intel-grid {
-    grid-template-columns: minmax(0, 2.15fr) minmax(310px, 0.72fr);
+  .app-shell[data-active-tab="route"] .route-intel-grid {
+    grid-template-columns: minmax(0, 2.7fr) minmax(300px, 0.74fr);
     gap: 14px;
   }
 
@@ -3778,9 +3791,9 @@ body {
     grid-template-columns: minmax(260px, 0.62fr) minmax(360px, 1fr);
   }
 
-  .osm-map-shell {
-    height: clamp(560px, 68vh, 820px);
-    min-height: 540px;
+  .app-shell[data-active-tab="route"] .osm-map-shell {
+    height: clamp(620px, 72vh, 860px);
+    min-height: 580px;
   }
 
   .route-side-stack {
@@ -3791,6 +3804,10 @@ body {
 }
 
 @media (max-width: 719px) {
+  .app-shell {
+    padding: 10px 10px calc(104px + env(safe-area-inset-bottom));
+  }
+
   .auth-page.waymate-auth {
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--sky) 20%, transparent), transparent 220px),
@@ -3807,15 +3824,114 @@ body {
   }
 
   .mobile-tabs.app-tabs {
-    top: 70px;
+    position: fixed;
+    top: auto;
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+    z-index: 1300;
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--panel) 90%, transparent);
+    box-shadow: 0 18px 44px rgba(5, 25, 20, 0.22);
+    padding: 6px;
   }
 
   .mobile-tabs.app-tabs button {
     display: grid;
-    min-height: 54px;
+    min-height: 56px;
+    border-radius: 14px;
     gap: 4px;
     font-size: 0.72rem;
+  }
+
+  .chat-dock {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .chat-panel {
+    height: min(520px, calc(100vh - 176px));
+  }
+
+  .app-shell[data-active-tab="route"] .trip-manager,
+  .app-shell[data-active-tab="route"] .trip-strip,
+  .app-shell[data-active-tab="route"] .summary-grid,
+  .app-shell[data-active-tab="route"] .live-sync-bar,
+  .app-shell[data-active-tab="route"] .trip-lifecycle {
+    display: none;
+  }
+
+  .app-shell[data-active-tab="route"] .top-bar {
+    margin-bottom: 10px;
+    padding: 8px;
+  }
+
+  .app-shell[data-active-tab="route"] .brand-copy span {
+    font-size: 0.74rem;
+  }
+
+  .app-shell[data-active-tab="route"] .route-intel {
+    margin: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+  }
+
+  .app-shell[data-active-tab="route"] .route-intel > .panel-heading {
+    margin: 0 2px 8px;
+    padding: 0 2px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-builder {
+    gap: 7px;
+    margin-bottom: 10px;
+    border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    box-shadow: 0 12px 30px rgba(14, 34, 28, 0.1);
+    padding: 10px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-builder input,
+  .app-shell[data-active-tab="route"] .route-builder button {
+    min-height: 40px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-intel-grid {
+    gap: 10px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-map-panel {
+    overflow: hidden;
+    border-radius: 18px;
+    padding: 0;
+  }
+
+  .app-shell[data-active-tab="route"] .osm-map-shell {
+    height: calc(100svh - 322px);
+    min-height: 420px;
+    border: 0;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .app-shell[data-active-tab="route"] .route-map-head {
+    padding: 10px 12px 0;
+  }
+
+  .app-shell[data-active-tab="route"] .route-alerts {
+    padding: 10px 12px 12px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-side-stack {
+    gap: 10px;
+  }
+
+  .app-shell[data-active-tab="route"] .waypoint-list {
+    display: none;
   }
 
   .route-card {

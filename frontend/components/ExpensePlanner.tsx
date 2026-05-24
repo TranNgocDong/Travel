@@ -2201,11 +2201,11 @@ function PresencePanel({
   selectedUserId: string | null;
 }) {
   return (
-    <section className="presence-panel" aria-label="Hiện diện trong phòng">
+    <section className="presence-panel" aria-label="Nhóm đang đi">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Hiện diện</span>
-          <h2>{presenceUsers.length} đang trong phòng</h2>
+          <span className="eyebrow">Nhóm đang đi</span>
+          <h2>{presenceUsers.length} người online</h2>
         </div>
         <Users size={22} />
       </div>
