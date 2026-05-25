@@ -2,9 +2,7 @@
 
 import {
   ArrowRightLeft,
-  AlertTriangle,
   Archive,
-  BedDouble,
   Bike,
   Calculator,
   Check,
@@ -124,23 +122,41 @@ const categories = [
   { id: "border", label: "Cửa khẩu", icon: ShieldCheck },
 ];
 
-const mapMarkerKinds: Array<{ id: ApiMapMarkerKind; label: string; icon: typeof MapPin }> = [
-  { id: "ping", label: "Ping", icon: MapPin },
-  { id: "meetup", label: "Hẹn gặp", icon: Users },
-  { id: "fuel", label: "Đổ xăng", icon: Fuel },
-  { id: "food", label: "Quán ăn", icon: ReceiptText },
-  { id: "lodging", label: "Ngủ nghỉ", icon: BedDouble },
-  { id: "repair", label: "Sửa xe", icon: Bike },
-  { id: "warning", label: "Cảnh báo", icon: AlertTriangle },
+const mapMarkerKinds: Array<{ id: ApiMapMarkerKind; label: string }> = [
+  { id: "ping", label: "Ping" },
+  { id: "meetup", label: "Hẹn gặp" },
+  { id: "fuel", label: "Đổ xăng" },
+  { id: "food", label: "Quán ăn" },
+  { id: "lodging", label: "Ngủ nghỉ" },
+  { id: "repair", label: "Sửa xe" },
+  { id: "warning", label: "Cảnh báo" },
 ];
 
-const poiFilters: Array<{ id: ApiTripPoiKind; label: string; icon: typeof MapPin }> = [
-  { id: "food", label: "Quán ăn", icon: ReceiptText },
-  { id: "lodging", label: "Khách sạn", icon: BedDouble },
-  { id: "fuel", label: "Cây xăng", icon: Fuel },
+const poiFilters: Array<{ id: ApiTripPoiKind; label: string }> = [
+  { id: "food", label: "Quán ăn" },
+  { id: "lodging", label: "Khách sạn" },
+  { id: "fuel", label: "Cây xăng" },
 ];
 
 const locationShareIntervalMs = 15_000;
+const mapIconBasePath = "/map-icons";
+type TrailIconKind = ApiMapMarkerKind | ApiTripPoiKind | "member" | "sos";
+
+function mapMarkerIconPath(kind: ApiMapMarkerKind): string {
+  return trailIconPath(kind);
+}
+
+function poiIconPath(kind: ApiTripPoiKind): string {
+  return trailIconPath(kind);
+}
+
+function trailIconPath(kind: TrailIconKind): string {
+  return `${mapIconBasePath}/${kind}.svg`;
+}
+
+function TrailMapIcon({ kind, className = "trail-map-icon" }: { kind: TrailIconKind; className?: string }) {
+  return <img className={className} src={trailIconPath(kind)} alt="" aria-hidden="true" />;
+}
 
 export function ExpensePlanner() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -2675,8 +2691,6 @@ function RouteIntelligence({
 
             <div className="poi-filter-grid" aria-label="Lọc địa điểm trên map">
               {poiFilters.map((item) => {
-                const Icon = item.icon;
-
                 return (
                   <button
                     key={item.id}
@@ -2684,7 +2698,7 @@ function RouteIntelligence({
                     type="button"
                     onClick={() => onTogglePoiKind(item.id)}
                   >
-                    <Icon size={14} />
+                    <TrailMapIcon kind={item.id} />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -2695,7 +2709,9 @@ function RouteIntelligence({
               {pois.length ? (
                 pois.slice(0, 7).map((poi) => (
                   <div className="poi-row" key={poi.id}>
-                    <span className={`poi-dot ${poi.kind}`}>{poiSymbol(poi.kind)}</span>
+                    <span className={`poi-dot ${poi.kind}`}>
+                      <TrailMapIcon kind={poi.kind} />
+                    </span>
                     <div>
                       <strong>{poi.name}</strong>
                       <small>
@@ -2772,8 +2788,6 @@ function RouteIntelligence({
 
             <div className="marker-kind-grid" aria-label="Loại điểm đánh dấu">
               {mapMarkerKinds.map((item) => {
-                const Icon = item.icon;
-
                 return (
                   <button
                     key={item.id}
@@ -2781,7 +2795,7 @@ function RouteIntelligence({
                     type="button"
                     onClick={() => onMapMarkerKindChange(item.id)}
                   >
-                    <Icon size={14} />
+                    <TrailMapIcon kind={item.id} />
                     <span>{item.label}</span>
                   </button>
                 );
@@ -2802,7 +2816,9 @@ function RouteIntelligence({
               {mapMarkers.length ? (
                 mapMarkers.slice(0, 5).map((marker) => (
                   <div className="map-marker-row" key={marker.id}>
-                    <span className={`map-marker-dot ${marker.kind}`}>{mapMarkerSymbol(marker.kind)}</span>
+                    <span className={`map-marker-dot ${marker.kind}`}>
+                      <TrailMapIcon kind={marker.kind} />
+                    </span>
                     <div>
                       <strong>{marker.label}</strong>
                       <small>{marker.displayName} - {formatLocationTime(marker.createdAt)}</small>
@@ -3037,7 +3053,7 @@ function OpenStreetRouteMap({
           .marker(latLng, {
             icon: leaflet.divIcon({
               className: location.userId === currentUserId ? "member-location-marker self" : "member-location-marker",
-              html: `<span>${escapeHtml(initials)}</span>`,
+              html: `<img src="${escapeHtml(trailIconPath("member"))}" alt="" aria-hidden="true" /><span>${escapeHtml(initials)}</span>`,
               iconAnchor: [16, 16],
               iconSize: [32, 32],
             }),
@@ -3116,7 +3132,7 @@ function OpenStreetRouteMap({
           .marker(latLng, {
             icon: leaflet.divIcon({
               className: `poi-marker ${poi.kind}`,
-              html: `<span>${escapeHtml(poiSymbol(poi.kind))}</span>`,
+              html: `<img src="${escapeHtml(poiIconPath(poi.kind))}" alt="" aria-hidden="true" />`,
               iconAnchor: [14, 28],
               iconSize: [28, 28],
             }),
@@ -3166,7 +3182,7 @@ function OpenStreetRouteMap({
           .marker(latLng, {
             icon: leaflet.divIcon({
               className: `map-marker-pin ${marker.kind}`,
-              html: `<span>${escapeHtml(mapMarkerSymbol(marker.kind))}</span>`,
+              html: `<img src="${escapeHtml(mapMarkerIconPath(marker.kind))}" alt="" aria-hidden="true" />`,
               iconAnchor: [16, 32],
               iconSize: [32, 32],
             }),
@@ -3676,34 +3692,6 @@ function mapMarkerKindLabel(kind: ApiMapMarkerKind): string {
   return "Ping";
 }
 
-function mapMarkerSymbol(kind: ApiMapMarkerKind): string {
-  if (kind === "meetup") {
-    return "H";
-  }
-
-  if (kind === "fuel") {
-    return "X";
-  }
-
-  if (kind === "food") {
-    return "A";
-  }
-
-  if (kind === "lodging") {
-    return "N";
-  }
-
-  if (kind === "repair") {
-    return "S";
-  }
-
-  if (kind === "warning") {
-    return "!";
-  }
-
-  return "+";
-}
-
 function poiKindLabel(kind: ApiTripPoiKind): string {
   if (kind === "fuel") {
     return "Cây xăng";
@@ -3714,18 +3702,6 @@ function poiKindLabel(kind: ApiTripPoiKind): string {
   }
 
   return "Quán ăn";
-}
-
-function poiSymbol(kind: ApiTripPoiKind): string {
-  if (kind === "fuel") {
-    return "X";
-  }
-
-  if (kind === "lodging") {
-    return "N";
-  }
-
-  return "A";
 }
 
 function escapeHtml(value: string): string {

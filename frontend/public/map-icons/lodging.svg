@@ -1,0 +1,6 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lodging">
+  <path d="M16 30c6-5 10-10 10-16a10 10 0 1 0-20 0c0 6 4 11 10 16Z" fill="#4f46e5"/>
+  <circle cx="16" cy="14" r="8" fill="#f3f1ff"/>
+  <path d="M9 20.5V9.7M23 20.5v-5.6c0-1.5-1.2-2.7-2.7-2.7H14v8.3" stroke="#312e81" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M9 15.2h14M10.8 12.4h3.2" stroke="#312e81" stroke-width="1.9" stroke-linecap="round"/>
+</svg>

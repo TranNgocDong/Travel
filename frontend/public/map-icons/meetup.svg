@@ -1,0 +1,7 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meetup">
+  <path d="M16 30c6-5 10-10 10-16a10 10 0 1 0-20 0c0 6 4 11 10 16Z" fill="#0f766e"/>
+  <circle cx="16" cy="14" r="8" fill="#e9fffa"/>
+  <circle cx="13" cy="12" r="2.5" fill="#0f3f3a"/>
+  <circle cx="19" cy="12" r="2.5" fill="#0f3f3a"/>
+  <path d="M9.5 21c.8-3.1 2.6-4.7 5.2-4.7h2.6c2.6 0 4.4 1.6 5.2 4.7" fill="none" stroke="#0f3f3a" stroke-width="1.9" stroke-linecap="round"/>
+</svg>

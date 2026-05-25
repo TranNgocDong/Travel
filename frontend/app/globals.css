@@ -5877,6 +5877,96 @@ body {
   }
 }
 
+/* TrailLedger map icon system */
+.trail-map-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.poi-filter-grid .trail-map-icon,
+.marker-kind-grid .trail-map-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.poi-dot,
+.map-marker-dot {
+  background: transparent !important;
+}
+
+.poi-dot .trail-map-icon,
+.map-marker-dot .trail-map-icon {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 5px 10px rgba(15, 23, 42, 0.18));
+}
+
+.poi-marker,
+.map-marker-pin {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none;
+  transform: none;
+}
+
+.poi-marker img,
+.map-marker-pin img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  transform: translate(-1px, -2px);
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.24));
+}
+
+.poi-marker span,
+.map-marker-pin span {
+  transform: none;
+}
+
+.member-location-marker {
+  position: relative;
+  overflow: visible;
+  border: 0;
+  background: transparent !important;
+  box-shadow: none;
+}
+
+.member-location-marker img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  transform: translate(-1px, -1px);
+  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.24));
+}
+
+.member-location-marker span {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 0.52rem;
+  line-height: 1;
+  transform: none;
+}
+
+.member-location-marker.self span {
+  background: #2563eb;
+}
+
 /* Performance pass: keep the login art crisp without asking low-end phones to repaint heavy layers. */
 .waymate-auth .auth-card {
   backdrop-filter: none;
