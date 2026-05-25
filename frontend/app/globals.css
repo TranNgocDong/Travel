@@ -1124,19 +1124,42 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px !important;
-  height: 20px !important;
+  width: 28px !important;
+  height: 28px !important;
   border: 3px solid #ffffff;
   border-radius: 999px;
   background: #2563eb;
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.22), 0 6px 16px rgba(15, 23, 42, 0.22);
 }
 
-.user-location-marker span {
-  width: 6px;
-  height: 6px;
+.user-location-heading {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  transition: transform 220ms ease;
+}
+
+.user-location-heading::before {
+  content: "";
+  display: block;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: #ffffff;
+}
+
+.user-location-marker.has-heading .user-location-heading::before {
+  width: 0;
+  height: 0;
+  border-right: 6px solid transparent;
+  border-bottom: 15px solid #ffffff;
+  border-left: 6px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  transform: translateY(-2px);
 }
 
 .member-location-marker {

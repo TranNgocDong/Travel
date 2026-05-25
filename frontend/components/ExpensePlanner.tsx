@@ -2961,9 +2961,9 @@ function OpenStreetRouteMap({
         .marker(latLng, {
           icon: leaflet.divIcon({
             className: "user-location-marker",
-            html: "<span></span>",
-            iconAnchor: [10, 10],
-            iconSize: [20, 20],
+            html: '<span class="user-location-heading"></span>',
+            iconAnchor: [14, 14],
+            iconSize: [28, 28],
           }),
           title: "Vị trí của bạn",
         })
@@ -2971,6 +2971,18 @@ function OpenStreetRouteMap({
         .addTo(map);
     } else {
       userMarkerRef.current.setLatLng(latLng);
+    }
+
+    const heading = typeof position.coords.heading === "number" && Number.isFinite(position.coords.heading) ? position.coords.heading : null;
+    const markerElement = userMarkerRef.current.getElement();
+
+    if (markerElement) {
+      markerElement.classList.toggle("has-heading", heading !== null);
+      const headingElement = markerElement.querySelector<HTMLElement>(".user-location-heading");
+
+      if (headingElement && heading !== null) {
+        headingElement.style.transform = `rotate(${heading}deg)`;
+      }
     }
 
     map.setView(latLng, Math.max(map.getZoom(), 15), {
