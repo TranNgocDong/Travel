@@ -5918,3 +5918,109 @@ body {
     opacity: 0.76;
   }
 }
+
+/* Keep the login screen fixed to one viewport to avoid scroll jank. */
+.auth-page.waymate-auth {
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.waymate-auth .auth-panel-zone {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.waymate-auth .auth-card {
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+}
+
+@media (max-width: 980px) {
+  .auth-page.waymate-auth {
+    padding: 0 14px;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0;
+  }
+
+  .waymate-auth .auth-card {
+    width: min(440px, 100%);
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .waymate-auth .auth-switch {
+    min-height: 50px;
+    padding: 5px;
+  }
+
+  .waymate-auth .auth-switch button {
+    min-height: 40px;
+  }
+
+  .waymate-auth .auth-card-visual {
+    min-height: 96px;
+    border-radius: 14px;
+  }
+
+  .waymate-auth .auth-card-head {
+    margin-top: 0;
+  }
+
+  .waymate-auth .auth-card-brand img {
+    width: 54px;
+    height: 54px;
+  }
+
+  .waymate-auth .auth-card-brand h2 {
+    font-size: clamp(1.55rem, 7vw, 2rem);
+  }
+
+  .waymate-auth .auth-card-brand p {
+    font-size: 0.83rem;
+  }
+
+  .waymate-auth .auth-card-tagline {
+    margin-top: 3px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+}
+
+@media (max-width: 430px), (max-height: 740px) {
+  .waymate-auth .auth-card {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .waymate-auth .auth-card-visual {
+    min-height: 78px;
+  }
+
+  .waymate-auth .auth-card-brand {
+    gap: 10px;
+  }
+
+  .waymate-auth .auth-card-brand img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .waymate-auth .auth-card-brand h2 {
+    font-size: 1.55rem;
+  }
+
+  .waymate-auth .auth-card-head p {
+    font-size: 0.78rem;
+  }
+
+  .waymate-auth .auth-card-tagline {
+    font-size: 0.68rem;
+  }
+}
