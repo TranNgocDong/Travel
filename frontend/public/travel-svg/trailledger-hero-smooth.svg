@@ -60,6 +60,9 @@
       #goldDotB { animation: dotPulse 5.5s ease-in-out infinite; }
       #routeLine { stroke-dasharray: 620; stroke-dashoffset: 0; animation: routeGlow 6.2s ease-in-out infinite; }
       #hiker { animation: hikerWave 4.2s ease-in-out infinite; }
+      #blob, #seaGroup, #mapGroup, #compassGroup, #needle, #vanGroup, #goldDotA, #goldDotB, #routeLine, #hiker {
+        animation: none !important;
+      }
       @keyframes blobFloat {
         0%,100% { transform: translate(0,0) scale(1); }
         50% { transform: translate(12px,-10px) scale(1.018); }

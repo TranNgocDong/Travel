@@ -5876,3 +5876,45 @@ body {
     transform: none;
   }
 }
+
+/* Performance pass: keep the login art crisp without asking low-end phones to repaint heavy layers. */
+.waymate-auth .auth-card {
+  backdrop-filter: none;
+}
+
+.waymate-auth .auth-card-visual img,
+.waymate-auth .smooth-travel-svg {
+  filter: none;
+  will-change: auto;
+}
+
+.waymate-auth .auth-card-visual::after {
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.34));
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-hero .svg-travel-scene {
+    display: block;
+    opacity: 0.2;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    padding-top: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waymate-auth *,
+  .waymate-auth *::before,
+  .waymate-auth *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.12s !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-hero .smooth-travel-svg {
+    opacity: 0.76;
+  }
+}
