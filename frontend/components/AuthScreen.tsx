@@ -293,7 +293,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
 
         <form className="auth-card" onSubmit={handleSubmit}>
           <div className="auth-card-visual" aria-hidden="true">
-            <img src="/travel-svg/trailledger-hero-smooth.svg" alt="" />
+            <img src="/travel-svg/trailledger-card-hero.svg" alt="" />
           </div>
 
           <div className="auth-card-head">
@@ -302,6 +302,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
               <div>
                 <h2>TrailLedger</h2>
                 <p>{mode === "login" ? "Đăng nhập để tiếp tục chuyến đi." : "Tạo tài khoản cho chuyến đi của bạn."}</p>
+                <p className="auth-card-tagline">Lập kế hoạch. Đi cùng nhau. Theo dõi an toàn.</p>
               </div>
             </div>
           </div>

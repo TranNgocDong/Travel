@@ -5796,7 +5796,7 @@ body {
   }
 }
 
-/* The slogan is now drawn inside the SVG hero itself. */
+/* The slogan now lives as a compact brand line under the logo. */
 .waymate-auth .auth-hero .auth-hero-copy {
   display: none !important;
 }
@@ -5841,5 +5841,38 @@ body {
 
   .waymate-auth .auth-card-visual img {
     transform: scale(1.52);
+  }
+}
+
+/* Card artwork uses a no-slogan SVG variant, so keep it neatly inside the strip. */
+.waymate-auth .auth-card-visual {
+  contain: paint;
+}
+
+.waymate-auth .auth-card-visual img {
+  object-fit: cover;
+  object-position: center center;
+  transform: none;
+}
+
+.waymate-auth .auth-card-tagline {
+  margin-top: 6px;
+  max-width: 280px;
+  color: #0a5a4b;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-card-visual img {
+    object-position: center center;
+    transform: none;
+  }
+}
+
+@media (max-width: 430px) {
+  .waymate-auth .auth-card-visual img {
+    transform: none;
   }
 }
