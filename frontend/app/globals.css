@@ -5718,3 +5718,128 @@ body {
     padding-top: 260px;
   }
 }
+
+/* Put the travel artwork inside the login card so it is never hidden by the form. */
+.waymate-auth .auth-card {
+  overflow: hidden;
+}
+
+.waymate-auth .auth-card-visual {
+  position: relative;
+  min-height: clamp(128px, 19vw, 176px);
+  overflow: hidden;
+  border: 1px solid rgba(13, 83, 69, 0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 78% 18%, rgba(218, 177, 83, 0.28), transparent 26%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(222, 244, 236, 0.68));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.waymate-auth .auth-card-visual::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 44%;
+  content: "";
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.56));
+  pointer-events: none;
+}
+
+.waymate-auth .auth-card-visual img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 44%;
+  transform: scale(1.08);
+  filter: saturate(1.05) contrast(1.02);
+}
+
+.waymate-auth .auth-card-head {
+  margin-top: 4px;
+}
+
+.waymate-auth .auth-hero .svg-travel-scene {
+  opacity: 0.34;
+}
+
+@media (min-width: 981px) {
+  .waymate-auth .auth-card {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-card-visual {
+    min-height: 132px;
+    border-radius: 16px;
+  }
+
+  .waymate-auth .auth-card-visual img {
+    object-position: center 48%;
+    transform: scale(1.12);
+  }
+
+  .waymate-auth .auth-hero .svg-travel-scene {
+    opacity: 0.18;
+  }
+}
+
+@media (max-width: 430px) {
+  .waymate-auth .auth-card-visual {
+    min-height: 112px;
+  }
+
+  .waymate-auth .auth-card-visual img {
+    transform: scale(1.16);
+  }
+}
+
+/* The slogan is now drawn inside the SVG hero itself. */
+.waymate-auth .auth-hero .auth-hero-copy {
+  display: none !important;
+}
+
+.waymate-auth .auth-hero .svg-travel-scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  aspect-ratio: auto;
+}
+
+.waymate-auth .auth-hero .svg-travel-scene {
+  opacity: 0.82;
+}
+
+.waymate-auth .auth-card-visual img {
+  object-position: center 62%;
+  transform: scale(1.34);
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-panel-zone {
+    padding-top: 72px;
+  }
+
+  .waymate-auth .auth-hero .svg-travel-scene {
+    opacity: 0.42;
+  }
+
+  .waymate-auth .auth-card-visual img {
+    object-position: center 62%;
+    transform: scale(1.44);
+  }
+}
+
+@media (max-width: 430px) {
+  .waymate-auth .auth-panel-zone {
+    padding-top: 64px;
+  }
+
+  .waymate-auth .auth-card-visual img {
+    transform: scale(1.52);
+  }
+}

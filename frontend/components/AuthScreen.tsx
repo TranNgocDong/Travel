@@ -292,6 +292,10 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
         </div>
 
         <form className="auth-card" onSubmit={handleSubmit}>
+          <div className="auth-card-visual" aria-hidden="true">
+            <img src="/travel-svg/trailledger-hero-smooth.svg" alt="" />
+          </div>
+
           <div className="auth-card-head">
             <div className="auth-card-brand">
               <img src="/trailledger-logo.png" alt="TrailLedger" />

@@ -275,4 +275,13 @@
     <path d="M1020 804C1031 788 1048 786 1060 799C1053 803 1048 808 1047 819C1038 819 1028 814 1020 804Z" fill="#D7B96B"/>
     <path d="M1032 847H1048M1040 846V873M1014 873H1066" stroke="#D7B96B" stroke-width="7" stroke-linecap="round"/>
   </g>
+
+  <g id="sloganPanel" filter="url(#softShadow)">
+    <rect x="38" y="54" width="774" height="394" rx="18" fill="#F8FBF6" fill-opacity=".82" stroke="#FFFFFF" stroke-opacity=".78" stroke-width="2"/>
+    <rect x="86" y="98" width="346" height="64" rx="32" fill="#E6F1EC" stroke="#B8D1C9" stroke-width="2"/>
+    <text x="120" y="139" fill="#064A3E" font-family="Arial, sans-serif" font-size="23" font-weight="900" letter-spacing="3">TRAVEL GROUP WORKSPACE</text>
+    <text x="78" y="250" fill="#063F36" font-family="Georgia, 'Times New Roman', serif" font-size="84" font-weight="900">Lập kế hoạch.</text>
+    <text x="78" y="340" fill="#063F36" font-family="Georgia, 'Times New Roman', serif" font-size="84" font-weight="900">Đi cùng nhau.</text>
+    <text x="78" y="430" fill="#063F36" font-family="Georgia, 'Times New Roman', serif" font-size="84" font-weight="900">Theo dõi an toàn.</text>
+  </g>
 </svg>
