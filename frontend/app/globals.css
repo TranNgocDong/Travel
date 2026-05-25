@@ -5811,7 +5811,7 @@ body {
 }
 
 .waymate-auth .auth-hero .svg-travel-scene {
-  opacity: 0.82;
+  opacity: 0.9;
 }
 
 .waymate-auth .auth-card-visual img {
@@ -5851,7 +5851,7 @@ body {
 
 .waymate-auth .auth-card-visual img {
   object-fit: cover;
-  object-position: center center;
+  object-position: 45% 44%;
   transform: none;
 }
 
@@ -5866,7 +5866,7 @@ body {
 
 @media (max-width: 980px) {
   .waymate-auth .auth-card-visual img {
-    object-position: center center;
+    object-position: 45% 44%;
     transform: none;
   }
 }
@@ -5895,7 +5895,7 @@ body {
 @media (max-width: 980px) {
   .waymate-auth .auth-hero .svg-travel-scene {
     display: block;
-    opacity: 0.2;
+    opacity: 0.36;
   }
 
   .waymate-auth .auth-panel-zone {
@@ -5915,7 +5915,7 @@ body {
 
 @media (max-width: 980px) {
   .waymate-auth .auth-hero .smooth-travel-svg {
-    opacity: 0.76;
+    opacity: 0.9;
   }
 }
 
@@ -5951,8 +5951,8 @@ body {
 
   .waymate-auth .auth-card {
     width: min(440px, 100%);
-    gap: 10px;
-    padding: 14px;
+    gap: 8px;
+    padding: 12px;
   }
 
   .waymate-auth .auth-switch {
@@ -5965,7 +5965,7 @@ body {
   }
 
   .waymate-auth .auth-card-visual {
-    min-height: 96px;
+    min-height: 150px;
     border-radius: 14px;
   }
 
@@ -5995,12 +5995,12 @@ body {
 
 @media (max-width: 430px), (max-height: 740px) {
   .waymate-auth .auth-card {
-    gap: 8px;
-    padding: 12px;
+    gap: 6px;
+    padding: 9px;
   }
 
   .waymate-auth .auth-card-visual {
-    min-height: 78px;
+    min-height: clamp(128px, 19vh, 150px);
   }
 
   .waymate-auth .auth-card-brand {
