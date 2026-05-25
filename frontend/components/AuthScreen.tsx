@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Compass, Eye, EyeOff, Globe2, KeyRound, Languages, LockKeyhole, Mail, MapPin, Moon, ShieldCheck, Sun, UserRound, X } from "lucide-react";
+import { Check, Eye, EyeOff, KeyRound, Languages, LockKeyhole, Mail, Moon, Sun, UserRound, X } from "lucide-react";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 
 import { login, loginWithApple, loginWithGoogle, registerWithEmail, requestPasswordReset, type ApiUser } from "@/lib/api";
@@ -260,17 +260,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           </div>
         </div>
 
-        <div className="auth-visual-card" aria-hidden="true">
-          <div className="visual-sky" />
-          <div className="visual-mountain back" />
-          <div className="visual-mountain front" />
-          <div className="visual-road" />
-          <div className="visual-compass">
-            <Compass size={58} />
-          </div>
-          <span className="visual-pin one"><MapPin size={18} /></span>
-          <span className="visual-pin two"><ShieldCheck size={18} /></span>
-          <span className="visual-pin three"><Globe2 size={18} /></span>
+        <div className="auth-visual-card svg-travel-scene" aria-hidden="true">
+          <img className="smooth-travel-svg" src="/travel-svg/trailledger-hero-smooth.svg" alt="" />
         </div>
 
         <div className="auth-hero-copy">

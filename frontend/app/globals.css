@@ -5096,3 +5096,625 @@ body {
     padding: 22px;
   }
 }
+/* Animated SVG travel hero */
+.waymate-auth .svg-travel-scene {
+  position: relative;
+  display: block;
+  width: min(100%, 760px);
+  aspect-ratio: 1 / 0.78;
+  justify-self: center;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+.svg-travel-scene .svg-layer {
+  position: absolute;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.svg-travel-scene .smooth-travel-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  pointer-events: none;
+  filter: saturate(1.04) contrast(1.02);
+}
+
+.svg-travel-scene .blob {
+  inset: -17% -13% -20% -17%;
+  width: 128%;
+  height: 128%;
+  object-fit: contain;
+  opacity: 0.98;
+  transform-origin: 47% 53%;
+  animation: travelBlobFloat 11s ease-in-out infinite;
+}
+
+.svg-travel-scene .ocean {
+  right: -8%;
+  top: 12%;
+  width: 58%;
+  opacity: 0.95;
+  animation: travelOceanDrift 9s ease-in-out infinite;
+}
+
+.svg-travel-scene .mountains {
+  left: -7%;
+  top: 9%;
+  width: 56%;
+  filter: drop-shadow(0 18px 20px rgba(15, 40, 32, 0.12));
+  animation: travelMountainsBreathe 12s ease-in-out infinite;
+}
+
+.svg-travel-scene .map-paper {
+  left: 20%;
+  top: 42%;
+  width: 51%;
+  filter: drop-shadow(0 18px 22px rgba(75, 55, 34, 0.16));
+  transform: rotate(-8deg);
+  animation: travelMapFloat 8s ease-in-out infinite;
+}
+
+.svg-travel-scene .compass {
+  left: 34%;
+  top: 21%;
+  width: 37%;
+  z-index: 4;
+  filter: drop-shadow(0 22px 24px rgba(23, 56, 44, 0.22));
+  transform-origin: 50% 56%;
+  animation: travelCompassFloat 6.5s ease-in-out infinite;
+}
+
+.svg-travel-scene .van {
+  right: -3%;
+  top: 58%;
+  width: 24%;
+  z-index: 5;
+  filter: drop-shadow(0 13px 16px rgba(18, 55, 50, 0.18));
+  animation: travelVanCruise 5.5s ease-in-out infinite;
+}
+
+.svg-travel-scene .hiker {
+  left: 17%;
+  top: 9%;
+  z-index: 5;
+  width: 22px;
+  height: 54px;
+  background:
+    radial-gradient(circle at 50% 8%, #073b2d 0 5px, transparent 5.5px),
+    linear-gradient(80deg, transparent 0 32%, #073b2d 33% 41%, transparent 42% 100%),
+    linear-gradient(-80deg, transparent 0 58%, #073b2d 59% 67%, transparent 68% 100%),
+    linear-gradient(#073b2d, #073b2d) 50% 16px / 7px 22px no-repeat,
+    linear-gradient(125deg, transparent 0 34%, #073b2d 35% 45%, transparent 46% 100%),
+    linear-gradient(55deg, transparent 0 55%, #073b2d 56% 66%, transparent 67% 100%);
+  border-radius: 999px;
+  transform: rotate(-7deg);
+  animation: travelHikerCelebrate 3.8s ease-in-out infinite;
+}
+
+.svg-travel-scene .gold-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 28%, #f6d98a, #b98b3b 72%);
+  box-shadow: 0 10px 22px rgba(105, 76, 35, 0.2);
+  opacity: 0.9;
+}
+
+.svg-travel-scene .gold-dot.one {
+  left: 29%;
+  top: 15%;
+  width: 48px;
+  height: 30px;
+  transform: rotate(-26deg);
+  animation: travelDotOrbit 7s ease-in-out infinite;
+}
+
+.svg-travel-scene .gold-dot.two {
+  right: 20%;
+  top: 14%;
+  width: 70px;
+  height: 70px;
+  animation: travelDotPulse 6s ease-in-out infinite;
+}
+
+.svg-travel-scene .route-line {
+  left: 7%;
+  bottom: 14%;
+  width: 30%;
+  height: 42%;
+  border-left: 4px solid rgba(177, 132, 60, 0.82);
+  border-bottom: 4px solid rgba(177, 132, 60, 0.82);
+  border-radius: 0 0 0 120px;
+  transform: rotate(-11deg);
+  opacity: 0.7;
+  animation: travelRouteDraw 5.8s ease-in-out infinite;
+}
+
+.svg-travel-scene .scene-title {
+  right: 9%;
+  bottom: 7%;
+  z-index: 6;
+  color: #0d4939;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.8rem, 3.8vw, 3.7rem);
+  font-weight: 950;
+  letter-spacing: 0;
+  text-shadow: 0 9px 24px rgba(255, 255, 255, 0.48);
+}
+
+@keyframes travelBlobFloat {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(1.6%, -1.4%, 0) scale(1.018); }
+}
+
+@keyframes travelOceanDrift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(2.5%, -1.2%, 0); }
+}
+
+@keyframes travelMountainsBreathe {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-1%, 1%, 0) scale(1.015); }
+}
+
+@keyframes travelMapFloat {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-8deg); }
+  50% { transform: translate3d(1.2%, -1.5%, 0) rotate(-5deg); }
+}
+
+@keyframes travelCompassFloat {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-1deg); }
+  50% { transform: translate3d(0, -2.5%, 0) rotate(3deg); }
+}
+
+@keyframes travelVanCruise {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  45% { transform: translate3d(-5%, -1.5%, 0) rotate(-1deg); }
+  70% { transform: translate3d(-3%, 0.8%, 0) rotate(0.8deg); }
+}
+
+@keyframes travelHikerCelebrate {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-7deg); }
+  50% { transform: translate3d(0, -7%, 0) rotate(4deg); }
+}
+
+@keyframes travelDotOrbit {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-26deg); }
+  50% { transform: translate3d(13%, -12%, 0) rotate(-16deg); }
+}
+
+@keyframes travelDotPulse {
+  0%, 100% { transform: scale(1); opacity: 0.88; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes travelRouteDraw {
+  0%, 100% { clip-path: inset(0 0 0 0); opacity: 0.58; }
+  50% { clip-path: inset(0 0 0 12%); opacity: 0.86; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .svg-travel-scene .svg-layer {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 719px) {
+  .waymate-auth .svg-travel-scene {
+    width: min(92vw, 420px);
+    margin: 0 auto 10px;
+    aspect-ratio: 1 / 0.74;
+  }
+
+  .svg-travel-scene .scene-title {
+    right: 8%;
+    bottom: 4%;
+    font-size: clamp(1.35rem, 8vw, 2.25rem);
+  }
+}
+
+.auth-page.waymate-auth {
+  background-image:
+    radial-gradient(circle at 78% 18%, rgba(236, 205, 129, 0.34), transparent 28%),
+    radial-gradient(circle at 22% 22%, rgba(65, 177, 157, 0.22), transparent 30%),
+    linear-gradient(135deg, #f8faf5 0%, #edf6f0 48%, #faf4e8 100%);
+}
+
+:root[data-theme="dark"] .auth-page.waymate-auth {
+  background-image:
+    radial-gradient(circle at 76% 20%, rgba(199, 159, 83, 0.18), transparent 30%),
+    radial-gradient(circle at 20% 20%, rgba(31, 154, 132, 0.18), transparent 32%),
+    linear-gradient(135deg, #06130f 0%, #08231b 52%, #11150d 100%);
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-hero {
+    display: block;
+    min-height: 0;
+    padding: 76px 16px 0;
+  }
+
+  .waymate-auth .auth-hero .auth-brand,
+  .waymate-auth .auth-hero .auth-hero-copy {
+    display: none;
+  }
+
+  .waymate-auth .auth-hero .svg-travel-scene {
+    width: min(86vw, 420px);
+    margin: 0 auto -8px;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    min-height: auto;
+    padding-top: 18px;
+  }
+}
+
+/* Full-screen animated login scene */
+.auth-page.waymate-auth {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 470px);
+  column-gap: clamp(22px, 5vw, 86px);
+  align-items: center;
+}
+
+.waymate-auth .auth-hero {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  min-height: 100dvh;
+  padding: 0;
+  pointer-events: none;
+}
+
+.waymate-auth .auth-hero .auth-brand,
+.waymate-auth .auth-hero .auth-hero-copy {
+  display: none;
+}
+
+.waymate-auth .auth-visual-card,
+.waymate-auth .svg-travel-scene {
+  display: block;
+}
+
+.waymate-auth .svg-travel-scene {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  aspect-ratio: auto;
+  margin: 0;
+  opacity: 0.98;
+}
+
+.svg-travel-scene .blob {
+  left: -22vw;
+  top: -22vh;
+  width: 82vw;
+  height: auto;
+}
+
+.svg-travel-scene .ocean {
+  right: -7vw;
+  top: 9vh;
+  width: 57vw;
+}
+
+.svg-travel-scene .mountains {
+  left: -5vw;
+  top: 10vh;
+  width: 49vw;
+}
+
+.svg-travel-scene .map-paper {
+  left: 28vw;
+  top: auto;
+  bottom: 8vh;
+  width: 36vw;
+}
+
+.svg-travel-scene .compass {
+  left: 37vw;
+  top: 26vh;
+  width: 25vw;
+}
+
+.svg-travel-scene .van {
+  right: 5vw;
+  top: auto;
+  bottom: 22vh;
+  width: 19vw;
+}
+
+.svg-travel-scene .hiker {
+  left: 15vw;
+  top: 12vh;
+}
+
+.svg-travel-scene .gold-dot.one {
+  left: 25vw;
+  top: 16vh;
+}
+
+.svg-travel-scene .gold-dot.two {
+  right: 22vw;
+  top: 12vh;
+}
+
+.svg-travel-scene .route-line {
+  left: 4vw;
+  bottom: 10vh;
+  width: 24vw;
+  height: 34vh;
+}
+
+.svg-travel-scene .scene-title {
+  right: auto;
+  left: clamp(28px, 6vw, 88px);
+  bottom: clamp(70px, 9vh, 110px);
+  font-size: clamp(2.3rem, 5.8vw, 6rem);
+}
+
+.waymate-auth .auth-panel-zone {
+  grid-column: 2;
+  min-height: 100dvh;
+  padding-inline: 0;
+}
+
+.waymate-auth .auth-card {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+@media (max-width: 980px) {
+  .auth-page.waymate-auth {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-height: 100dvh;
+    overflow-y: auto;
+    padding: 0 16px;
+  }
+
+  .waymate-auth .auth-hero {
+    position: fixed;
+    display: block;
+    padding: 0;
+  }
+
+  .waymate-auth .auth-mobile-brand {
+    display: none;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    grid-column: 1;
+    min-height: 100dvh;
+    justify-content: end;
+    padding: 84px 0 34px;
+  }
+
+  .waymate-auth .auth-card {
+    width: min(440px, 100%);
+    background: rgba(255, 255, 255, 0.84);
+  }
+
+  .svg-travel-scene .blob {
+    left: -42vw;
+    top: -11vh;
+    width: 150vw;
+  }
+
+  .svg-travel-scene .ocean {
+    right: -38vw;
+    top: 11vh;
+    width: 116vw;
+  }
+
+  .svg-travel-scene .mountains {
+    left: -31vw;
+    top: 9vh;
+    width: 104vw;
+  }
+
+  .svg-travel-scene .map-paper {
+    left: 8vw;
+    bottom: 30vh;
+    width: 80vw;
+  }
+
+  .svg-travel-scene .compass {
+    left: 26vw;
+    top: 20vh;
+    width: 52vw;
+  }
+
+  .svg-travel-scene .van {
+    right: -5vw;
+    bottom: 43vh;
+    width: 36vw;
+  }
+
+  .svg-travel-scene .hiker {
+    left: 17vw;
+    top: 11vh;
+  }
+
+  .svg-travel-scene .gold-dot.one {
+    left: 35vw;
+    top: 11vh;
+  }
+
+  .svg-travel-scene .gold-dot.two {
+    right: 10vw;
+    top: 13vh;
+  }
+
+  .svg-travel-scene .route-line {
+    left: -4vw;
+    bottom: 31vh;
+    width: 40vw;
+    height: 30vh;
+  }
+
+  .svg-travel-scene .scene-title {
+    left: 18px;
+    bottom: 24px;
+    opacity: 0.18;
+    font-size: clamp(2.4rem, 15vw, 4.8rem);
+  }
+}
+
+/* Keep the original TrailLedger slogan visible over the full-screen SVG scene. */
+.waymate-auth .auth-hero .auth-hero-copy {
+  position: fixed;
+  left: clamp(18px, 5vw, 72px);
+  bottom: clamp(78px, 10vh, 116px);
+  z-index: 3;
+  display: block;
+  width: min(620px, 48vw);
+  max-width: 620px;
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 22px 70px rgba(0, 52, 43, 0.12);
+  backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+
+.waymate-auth .auth-hero .auth-hero-copy h1 {
+  color: #063f36;
+  text-shadow: 0 10px 30px rgba(255, 255, 255, 0.58);
+}
+
+.waymate-auth .auth-hero .auth-hero-copy h1 span {
+  white-space: normal;
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-hero .auth-hero-copy {
+  border-color: rgba(131, 234, 216, 0.2);
+  background: rgba(5, 18, 15, 0.42);
+}
+
+:root[data-theme="dark"] .waymate-auth .auth-hero .auth-hero-copy h1 {
+  color: #eafff8;
+  text-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+}
+
+@media (min-width: 981px) {
+  .waymate-auth .smooth-travel-svg {
+    object-position: center center;
+  }
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-hero .auth-hero-copy {
+    top: 84px;
+    right: 16px;
+    bottom: auto;
+    left: 16px;
+    width: auto;
+    max-width: none;
+    padding: 16px;
+  }
+
+  .waymate-auth .auth-hero .auth-hero-copy .eyebrow {
+    font-size: 0.66rem;
+    padding: 7px 10px;
+  }
+
+  .waymate-auth .auth-hero .auth-hero-copy h1 {
+    margin-top: 10px;
+    font-size: clamp(1.95rem, 10vw, 3rem);
+    line-height: 1.02;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    padding-top: clamp(300px, 47vh, 390px);
+  }
+
+  .waymate-auth .smooth-travel-svg {
+    object-position: center top;
+  }
+}
+
+@media (max-width: 420px) {
+  .waymate-auth .auth-hero .auth-hero-copy {
+    top: 72px;
+    padding: 14px;
+  }
+
+  .waymate-auth .auth-hero .auth-hero-copy h1 {
+    font-size: clamp(1.7rem, 9.2vw, 2.4rem);
+  }
+
+  .waymate-auth .auth-panel-zone {
+    padding-top: 288px;
+  }
+}
+
+/* The hero illustration should stay complete on desktop and mobile. */
+.waymate-auth .svg-travel-scene {
+  background:
+    radial-gradient(circle at 48% 42%, rgba(255, 255, 255, 0.46), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(233, 246, 239, 0.64));
+}
+
+.waymate-auth .svg-travel-scene .smooth-travel-svg {
+  object-fit: contain;
+  object-position: center center;
+}
+
+@media (min-width: 981px) {
+  .waymate-auth .auth-hero .auth-hero-copy {
+    width: min(560px, 42vw);
+  }
+
+  .waymate-auth .auth-hero .auth-hero-copy h1 {
+    font-size: clamp(2.6rem, 4.8vw, 5.2rem);
+    line-height: 0.98;
+  }
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-hero .auth-hero-copy {
+    top: 72px;
+    background: rgba(255, 255, 255, 0.58);
+  }
+
+  .waymate-auth .auth-hero .auth-hero-copy h1 {
+    font-size: clamp(1.78rem, 8.5vw, 2.75rem);
+    line-height: 1.04;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    padding-top: clamp(292px, 44vh, 360px);
+  }
+}
+
+@media (max-width: 430px) {
+  .waymate-auth .auth-hero .auth-hero-copy {
+    left: 12px;
+    right: 12px;
+    top: 62px;
+    padding: 13px;
+  }
+
+  .waymate-auth .auth-hero .auth-hero-copy h1 {
+    font-size: clamp(1.58rem, 8vw, 2.1rem);
+    line-height: 1.06;
+  }
+
+  .waymate-auth .auth-panel-zone {
+    padding-top: 260px;
+  }
+}
