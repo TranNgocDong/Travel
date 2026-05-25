@@ -231,6 +231,7 @@ export function ExpensePlanner() {
   const [newMemberRole, setNewMemberRole] = useState<ApiTripRole>("viewer");
   const loadTripDataInFlightRef = useRef(false);
   const routeFormDirtyRef = useRef(false);
+  const routePlanSignatureRef = useRef("");
   const locationShareWatchIdRef = useRef<number | null>(null);
   const lastSharedPositionAtRef = useRef(0);
   const chatMessageListRef = useRef<HTMLDivElement | null>(null);
@@ -238,6 +239,7 @@ export function ExpensePlanner() {
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
     const safeRoutePlan = normalizeRoutePlan(nextRoutePlan);
 
+    routePlanSignatureRef.current = routePlanSignature(safeRoutePlan);
     routeFormDirtyRef.current = false;
     setRoutePlan(safeRoutePlan);
     setRouteOrigin(safeRoutePlan.origin);
@@ -274,7 +276,7 @@ export function ExpensePlanner() {
 
     const canUpdateRouteForm = !options.silent || !routeFormDirtyRef.current;
 
-    if (cachedRoutePlan && canUpdateRouteForm) {
+    if (cachedRoutePlan && canUpdateRouteForm && (!options.silent || routePlanSignatureRef.current !== routePlanSignature(cachedRoutePlan))) {
       applyRoutePlan(cachedRoutePlan, { cache: false, fromCache: true });
     }
 
@@ -292,6 +294,7 @@ export function ExpensePlanner() {
         setMemberLocations([]);
         setPresenceUsers([]);
         setChatMessages([]);
+        routePlanSignatureRef.current = "";
         setRoutePlan(null);
         setOfflineReady(false);
         setLastSyncedAt(new Date());
@@ -331,10 +334,13 @@ export function ExpensePlanner() {
       setPresenceUsers(nextPresence);
       setChatMessages(nextMessages);
       setMapMarkers(nextMapMarkers);
-      if (canUpdateRouteForm) {
-        applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      const normalizedRoutePlan = normalizeRoutePlan(nextRoutePlan);
+      const nextRouteSignature = routePlanSignature(normalizedRoutePlan);
+
+      if (canUpdateRouteForm && (!options.silent || routePlanSignatureRef.current !== nextRouteSignature)) {
+        applyRoutePlan(normalizedRoutePlan, { tripId: selectedTripId });
       } else {
-        writeCachedRoutePlan(normalizeRoutePlan(nextRoutePlan), selectedTripId);
+        writeCachedRoutePlan(normalizedRoutePlan, selectedTripId);
       }
       setLastSyncedAt(new Date());
     } catch (error) {
@@ -3849,6 +3855,22 @@ function writeCachedRoutePlan(routePlan: ApiRoutePlan, activeTripId: string) {
       routePlan: safeRoutePlan,
     }),
   );
+}
+
+function routePlanSignature(routePlan: ApiRoutePlan): string {
+  const geometryPoints = routePlan.geometry.length ? routePlan.geometry : routePlan.waypoints.map((waypoint) => waypoint.coordinate);
+  const geometrySignature = geometryPoints.map((point) => `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`).join("|");
+  const waypointSignature = routePlan.waypoints.map((waypoint) => `${waypoint.name}:${waypoint.coordinate.lat.toFixed(5)},${waypoint.coordinate.lng.toFixed(5)}`).join("|");
+
+  return [
+    routePlan.tripId,
+    routePlan.origin,
+    routePlan.destination,
+    routePlan.totalDistanceKm,
+    routePlan.durationMinutes,
+    geometrySignature,
+    waypointSignature,
+  ].join("::");
 }
 
 function routePlanCacheKey(activeTripId: string): string {
