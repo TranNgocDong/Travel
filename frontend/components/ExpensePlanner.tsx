@@ -1546,6 +1546,7 @@ export function ExpensePlanner() {
             <p>TrailLedger</p>
             <strong>Đang mở chuyến đi...</strong>
           </div>
+
         </div>
       )}
 
@@ -2590,6 +2591,30 @@ function RouteIntelligence({
   routePlan: ApiRoutePlan;
 }) {
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
+  const [isRideMode, setIsRideMode] = useState(false);
+  const currentWaypoint = routePlan.waypoints.find((waypoint) => waypoint.weather.riskLevel !== "low" || waypoint.stop?.priority === "required") ?? routePlan.waypoints[0] ?? null;
+  const visibleMembers = memberLocations.filter((location) => location.userId !== currentUserId).slice(0, 3);
+  const visiblePois = pois.slice(0, 3);
+
+  function handleRideModeToggle() {
+    setIsRideMode((current) => {
+      const next = !current;
+      setIsMapFullscreen(next || isMapFullscreen);
+      return next;
+    });
+  }
+
+  function handleMapFullscreenToggle() {
+    setIsMapFullscreen((current) => {
+      const next = !current;
+
+      if (!next) {
+        setIsRideMode(false);
+      }
+
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!isMapFullscreen) {
@@ -2644,12 +2669,21 @@ function RouteIntelligence({
       </form>
 
       <div className="route-intel-grid">
-        <div className={isMapFullscreen ? "route-map-panel map-fullscreen" : "route-map-panel"}>
+        <div className={isMapFullscreen ? "route-map-panel map-fullscreen" : "route-map-panel"} data-ride-mode={isRideMode ? "on" : "off"}>
+          <button
+            className={isRideMode ? "ride-mode-button active" : "ride-mode-button"}
+            type="button"
+            aria-pressed={isRideMode}
+            onClick={handleRideModeToggle}
+          >
+            <Navigation size={17} />
+            <span>{isRideMode ? "Thoát đang đi" : "Đang đi"}</span>
+          </button>
           <button
             className="map-fullscreen-button"
             type="button"
             aria-label={isMapFullscreen ? "Thu nhỏ bản đồ" : "Phóng to bản đồ"}
-            onClick={() => setIsMapFullscreen((current) => !current)}
+            onClick={handleMapFullscreenToggle}
           >
             {isMapFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
             <span>{isMapFullscreen ? "Thu nhỏ" : "Toàn màn hình"}</span>
@@ -2677,6 +2711,60 @@ function RouteIntelligence({
             <MiniMetric label="Thời tiết" value={`${routePlan.summary.weatherAlerts}`} />
             <MiniMetric label="Cửa khẩu" value={`${routePlan.summary.borderAlerts}`} />
           </div>
+          {isRideMode && (
+            <div className="ride-cockpit" aria-label="Ch? ?? ?ang ?i">
+              <div className="ride-status-card">
+                <div>
+                  <span className="eyebrow">?ang ?i</span>
+                  <strong>{routePlan.destination}</strong>
+                </div>
+                <p>
+                  {currentWaypoint
+                    ? `${currentWaypoint.weather.condition}, ${currentWaypoint.weather.tempC}?C ? m?a ${currentWaypoint.weather.rainChance}%`
+                    : "Ch?a c? d? li?u th?i ti?t"}
+                </p>
+              </div>
+
+              <div className="ride-action-grid">
+                <button className={isSharingLocation ? "active" : ""} type="button" onClick={isSharingLocation ? onStopSharingLocation : onStartSharingLocation}>
+                  <Navigation size={18} />
+                  <span>{isSharingLocation ? "T?t GPS" : "Chia s? GPS"}</span>
+                </button>
+                <button className="danger" type="button">
+                  <TrailMapIcon kind="sos" />
+                  <span>SOS</span>
+                </button>
+              </div>
+
+              <div className="ride-strip">
+                {visibleMembers.length ? (
+                  visibleMembers.map((location) => (
+                    <button key={location.userId} type="button" onClick={() => onPlanRouteToMember(location)} disabled={isPlanningRoute || isUsingCurrentLocation}>
+                      <TrailMapIcon kind="member" />
+                      <span>{location.displayName || "Th?nh vi?n"}</span>
+                      <em>?i g?p</em>
+                    </button>
+                  ))
+                ) : (
+                  <p>Ch?a c? th?nh vi?n ?ang chia s? GPS.</p>
+                )}
+              </div>
+
+              <div className="ride-poi-strip">
+                {visiblePois.length ? (
+                  visiblePois.map((poi) => (
+                    <button key={poi.id} type="button" onClick={() => onPlanRouteToPoi(poi)} disabled={isPlanningRoute || isUsingCurrentLocation}>
+                      <TrailMapIcon kind={poi.kind} />
+                      <span>{poiKindLabel(poi.kind)}</span>
+                      <em>{poi.distanceFromRouteKm} km</em>
+                    </button>
+                  ))
+                ) : (
+                  <p>Ch?a c? qu?n ?n, ch? ngh? ho?c c?y x?ng g?n tuy?n.</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="route-side-stack">

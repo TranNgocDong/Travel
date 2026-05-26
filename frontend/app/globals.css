@@ -960,6 +960,41 @@ button {
   backdrop-filter: blur(16px);
 }
 
+.ride-mode-button {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 560;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 950;
+  gap: 8px;
+  padding: 0 13px;
+  backdrop-filter: blur(16px);
+}
+
+.ride-mode-button.active,
+.route-map-panel.map-fullscreen .ride-mode-button {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(4, 25, 18, 0.84);
+  color: #ffffff;
+}
+
+.route-map-panel.map-fullscreen .ride-mode-button {
+  top: calc(14px + env(safe-area-inset-top));
+  left: calc(14px + env(safe-area-inset-left));
+}
+
 .route-map-panel .osm-map-controls {
   top: 62px;
 }
@@ -986,6 +1021,178 @@ button {
   min-height: 100dvh;
   border: 0;
   border-radius: 0;
+}
+
+.route-map-panel[data-ride-mode="on"] .route-map-head,
+.route-map-panel[data-ride-mode="on"] .route-alerts {
+  display: none;
+}
+
+.ride-cockpit {
+  position: absolute;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  left: calc(14px + env(safe-area-inset-left));
+  z-index: 555;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(190px, 0.8fr);
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ride-cockpit button {
+  pointer-events: auto;
+}
+
+.ride-status-card,
+.ride-action-grid,
+.ride-strip,
+.ride-poi-strip {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(4, 25, 18, 0.84);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  color: #ffffff;
+  backdrop-filter: blur(18px);
+}
+
+.ride-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  grid-column: 1 / 2;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.ride-status-card .eyebrow {
+  color: #9ff3e6;
+}
+
+.ride-status-card strong {
+  display: block;
+  max-width: 52vw;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ride-status-card p {
+  margin: 0;
+  color: #d9fff7;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+.ride-action-grid {
+  display: grid;
+  grid-column: 2 / 3;
+  grid-row: 1 / span 2;
+  gap: 8px;
+  padding: 10px;
+}
+
+.ride-action-grid button,
+.ride-strip button,
+.ride-poi-strip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 950;
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.ride-action-grid button.active {
+  background: #0f9f87;
+}
+
+.ride-action-grid button.danger {
+  background: #b42318;
+}
+
+.ride-action-grid .trail-map-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.ride-strip,
+.ride-poi-strip {
+  display: flex;
+  grid-column: 1 / 2;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px;
+  scrollbar-width: none;
+}
+
+.ride-strip::-webkit-scrollbar,
+.ride-poi-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.ride-strip p,
+.ride-poi-strip p {
+  margin: 0;
+  color: #d9fff7;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.ride-strip button,
+.ride-poi-strip button {
+  flex: 0 0 auto;
+}
+
+.ride-strip em,
+.ride-poi-strip em {
+  color: #9ff3e6;
+  font-style: normal;
+}
+
+@media (max-width: 760px) {
+  .ride-cockpit {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .ride-status-card,
+  .ride-action-grid,
+  .ride-strip,
+  .ride-poi-strip {
+    border-radius: 16px;
+  }
+
+  .ride-status-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ride-status-card strong {
+    max-width: 82vw;
+  }
+
+  .ride-status-card p {
+    text-align: left;
+  }
+
+  .ride-action-grid {
+    grid-column: auto;
+    grid-row: auto;
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .route-side-stack {
