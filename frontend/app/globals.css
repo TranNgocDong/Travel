@@ -6481,3 +6481,73 @@ body {
     font-size: 0.68rem;
   }
 }
+
+/* Small screens still need access to every input; keep the page fixed, but let the login card scroll. */
+.waymate-auth .auth-card {
+  min-height: 0;
+  max-height: calc(100dvh - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.waymate-auth .auth-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.waymate-auth .auth-card::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(0, 83, 68, 0.28);
+  background-clip: padding-box;
+}
+
+@media (max-width: 980px) {
+  .waymate-auth .auth-card {
+    max-height: calc(100dvh - 20px);
+  }
+}
+
+@media (max-width: 430px), (max-height: 740px) {
+  .waymate-auth .auth-card {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .waymate-auth .auth-field > div {
+    min-height: 54px;
+  }
+
+  .waymate-auth .auth-submit {
+    min-height: 56px;
+  }
+
+  .waymate-auth .social-button {
+    min-height: 48px;
+  }
+}
+
+@media (max-height: 640px) {
+  .waymate-auth .auth-card {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .waymate-auth .auth-card-visual {
+    min-height: 92px;
+  }
+
+  .waymate-auth .auth-card-head {
+    margin-top: 0;
+  }
+
+  .waymate-auth .auth-switch {
+    min-height: 46px;
+  }
+
+  .waymate-auth .auth-switch button {
+    min-height: 36px;
+  }
+}
