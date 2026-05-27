@@ -866,6 +866,12 @@ button {
   color: var(--text);
 }
 
+.route-builder .member-route-save-button {
+  border-color: color-mix(in srgb, #7c3aed 42%, var(--line));
+  background: color-mix(in srgb, #7c3aed 14%, var(--panel));
+  color: #6d28d9;
+}
+
 .route-builder .route-gps-note {
   grid-column: 1 / -1;
   margin: -2px 0 0;
@@ -878,6 +884,7 @@ button {
 .next-stop-card,
 .group-location-card,
 .poi-card,
+.member-route-card,
 .map-marker-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1736,6 +1743,136 @@ button {
 .group-location-row:disabled {
   cursor: default;
   opacity: 0.86;
+}
+
+.member-route-card {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.member-route-head,
+.member-route-row {
+  display: flex;
+  align-items: center;
+}
+
+.member-route-head {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.member-route-head strong {
+  display: block;
+  margin-top: 2px;
+}
+
+.member-route-list {
+  display: grid;
+  gap: 7px;
+}
+
+.member-route-list > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.member-route-row {
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 7px;
+}
+
+.member-route-row.hidden {
+  opacity: 0.62;
+}
+
+.member-route-row > span {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c3aed, #0f766e);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+}
+
+.member-route-row div {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+
+.member-route-row strong,
+.member-route-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-route-row strong {
+  font-size: 0.84rem;
+}
+
+.member-route-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.member-route-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.member-route-visible-button {
+  color: var(--accent-strong) !important;
+  font-size: 0.74rem;
+  font-weight: 950;
+  padding: 0 9px;
+}
+
+.member-route-visible-button.active {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+}
+
+.member-route-delete-button {
+  color: var(--danger) !important;
+}
+
+.member-route-label {
+  pointer-events: none;
+}
+
+.member-route-label span {
+  display: inline-flex;
+  max-width: 108px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--member-route-color) 86%, #111827);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+  font-size: 0.72rem;
+  font-weight: 950;
+  line-height: 1;
+  overflow: hidden;
+  padding: 6px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .group-location-row > span {

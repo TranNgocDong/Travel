@@ -26,6 +26,7 @@ import {
   type TripMapMarkerRepository,
 } from "./mapMarkers/tripMapMarkerRepository.js";
 import { findOpenStreetMapPoisForRoute, type TripPoiKind } from "./poi/openStreetMapPoi.js";
+import { InMemoryMemberRouteRepository, PostgresMemberRouteRepository, type MemberRouteRepository } from "./route/memberRouteRepository.js";
 import { InMemoryRoutePlanRepository, PostgresRoutePlanRepository, type RoutePlanRepository } from "./route/routePlanRepository.js";
 import { buildOpenStreetRoutePlan, buildStarterRoutePlan, reverseGeocodePoint, RoutePlannerError } from "./route/routePlanner.js";
 import { canManageMembers, canWriteTrip, TripAccessService, type TripRole } from "./trips/tripAccess.js";
@@ -53,6 +54,7 @@ const locationRepository: TripMemberLocationRepository = pool
   ? new PostgresTripMemberLocationRepository(pool)
   : new InMemoryTripMemberLocationRepository();
 const routePlanRepository: RoutePlanRepository = pool ? new PostgresRoutePlanRepository(pool) : new InMemoryRoutePlanRepository();
+const memberRouteRepository: MemberRouteRepository = pool ? new PostgresMemberRouteRepository(pool) : new InMemoryMemberRouteRepository();
 const tripRepository: TripRepository = pool ? new PostgresTripRepository(pool) : new InMemoryTripRepository();
 const tripAccess = new TripAccessService(memberRepository);
 const storageMode = pool ? "postgres" : "memory";
@@ -462,6 +464,106 @@ app.post("/api/v1/trips/:tripId/route-plan", async (request, reply) => {
   } catch (error) {
     return sendRoutePlannerError(reply, error);
   }
+});
+
+app.get("/api/v1/trips/:tripId/member-routes", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  return {
+    memberRoutes: await memberRouteRepository.listByTrip(tripId),
+  };
+});
+
+app.post("/api/v1/trips/:tripId/member-routes", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const parsed = parseRoutePlanBody(request.body);
+
+  if (!parsed.ok) {
+    return reply.status(400).send({
+      error: "VALIDATION_ERROR",
+      message: parsed.message,
+    });
+  }
+
+  try {
+    const routePlan = await buildOpenStreetRoutePlan(tripId, parsed.input);
+    const memberRoute = await memberRouteRepository.save({
+      id: `member_route_${randomUUID()}`,
+      tripId,
+      userId: user.id,
+      displayName: user.displayName,
+      routePlan: {
+        ...routePlan,
+        title: `Tuyến của ${user.displayName}`,
+      },
+    });
+    publishTripChange(tripId, user.id, "member_route_changed", user.displayName);
+
+    return reply.status(201).send({
+      memberRoute,
+    });
+  } catch (error) {
+    return sendRoutePlannerError(reply, error);
+  }
+});
+
+app.delete("/api/v1/trips/:tripId/member-routes/:routeId", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+  const routeId = parseRouteIdParam(request.params);
+
+  if (!tripId || !routeId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "read"))) {
+    return;
+  }
+
+  const route = await memberRouteRepository.findById(tripId, routeId);
+
+  if (!route) {
+    return reply.status(404).send({
+      error: "NOT_FOUND",
+      message: "Không tìm thấy tuyến riêng",
+    });
+  }
+
+  const role = await tripAccess.getRole(tripId, user.id);
+
+  if (route.userId !== user.id && role !== "owner") {
+    return reply.status(403).send({
+      error: "FORBIDDEN",
+      message: "Bạn không thể xóa tuyến riêng của người khác",
+    });
+  }
+
+  await memberRouteRepository.remove(tripId, routeId);
+  publishTripChange(tripId, user.id, "member_route_changed", user.displayName);
+
+  return reply.status(204).send();
 });
 
 app.get("/api/v1/trips/:tripId/map-markers", async (request, reply) => {
@@ -1061,6 +1163,15 @@ function parseTripParams(params: unknown, reply: FastifyReply): { tripId: string
   }
 
   return { tripId: (params as { tripId: string }).tripId };
+}
+
+function parseRouteIdParam(params: unknown): string | null {
+  if (!params || typeof params !== "object") {
+    return null;
+  }
+
+  const routeId = (params as { routeId?: unknown }).routeId;
+  return typeof routeId === "string" && routeId.length >= 8 && routeId.length <= 120 ? routeId : null;
 }
 
 function parseCreateTripBody(body: unknown):

@@ -36,13 +36,16 @@ import {
   addTripMember,
   createExpense,
   createTripMapMarker,
+  createMemberRoute,
   createTrip,
   defaultTripId,
+  deleteMemberRoute,
   deleteTrip,
   deleteTripMapMarker,
   fetchExpenses,
   fetchMemberLocationAddress,
   fetchMe,
+  fetchMemberRoutes,
   fetchRoutePlan,
   fetchTripMessages,
   fetchTripLocations,
@@ -69,6 +72,7 @@ import {
   type ApiGeoPoint,
   type ApiMapMarker,
   type ApiMapMarkerKind,
+  type ApiMemberRoute,
   type ApiMemberLocation,
   type ApiMemberLocationAddress,
   type ApiPresenceUser,
@@ -158,6 +162,17 @@ function TrailMapIcon({ kind, className = "trail-map-icon" }: { kind: TrailIconK
   return <img className={className} src={trailIconPath(kind)} alt="" aria-hidden="true" />;
 }
 
+function memberRouteColor(seed: string): string {
+  const palette = ["#7c3aed", "#f97316", "#0ea5e9", "#db2777", "#16a34a", "#d97706", "#0891b2"];
+  let hash = 0;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) % 9973;
+  }
+
+  return palette[hash % palette.length]!;
+}
+
 export function ExpensePlanner() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [activeTab, setActiveTab] = useState<MobileTab>("route");
@@ -171,6 +186,8 @@ export function ExpensePlanner() {
   const [balances, setBalances] = useState<ApiBalance[]>([]);
   const [settlements, setSettlements] = useState<ApiSettlement[]>([]);
   const [mapMarkers, setMapMarkers] = useState<ApiMapMarker[]>([]);
+  const [memberRoutes, setMemberRoutes] = useState<ApiMemberRoute[]>([]);
+  const [visibleMemberRouteIds, setVisibleMemberRouteIds] = useState<string[]>([]);
   const [tripPois, setTripPois] = useState<ApiTripPoi[]>([]);
   const [selectedPoiKinds, setSelectedPoiKinds] = useState<ApiTripPoiKind[]>(["food", "lodging", "fuel"]);
   const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
@@ -195,6 +212,8 @@ export function ExpensePlanner() {
   const [mapMarkerLabel, setMapMarkerLabel] = useState("");
   const [mapMarkerKind, setMapMarkerKind] = useState<ApiMapMarkerKind>("ping");
   const [isSavingMapMarker, setIsSavingMapMarker] = useState(false);
+  const [isSavingMemberRoute, setIsSavingMemberRoute] = useState(false);
+  const [deletingMemberRouteId, setDeletingMemberRouteId] = useState<string | null>(null);
   const [deletingMapMarkerId, setDeletingMapMarkerId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -290,6 +309,7 @@ export function ExpensePlanner() {
         setBalances([]);
         setSettlements([]);
         setMapMarkers([]);
+        setMemberRoutes([]);
         setTripPois([]);
         setMemberLocations([]);
         setPresenceUsers([]);
@@ -309,7 +329,7 @@ export function ExpensePlanner() {
         return;
       }
 
-      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence, nextMessages, nextMapMarkers] = await Promise.all([
+      const [nextMembers, nextExpenses, result, nextRoutePlan, nextLocations, nextPresence, nextMessages, nextMapMarkers, nextMemberRoutes] = await Promise.all([
         fetchTripMembers(selectedTripId),
         fetchExpenses(selectedTripId),
         fetchSettlementResult(selectedTripId),
@@ -318,6 +338,7 @@ export function ExpensePlanner() {
         fetchTripPresence(selectedTripId).catch(() => []),
         fetchTripMessages(selectedTripId).catch(() => []),
         fetchTripMapMarkers(selectedTripId).catch(() => []),
+        fetchMemberRoutes(selectedTripId).catch(() => []),
       ]);
       const mappedMembers = nextMembers.map(mapTripMember);
       const activeMemberIds = mappedMembers.filter((member) => member.active).map((member) => member.id);
@@ -334,6 +355,7 @@ export function ExpensePlanner() {
       setPresenceUsers(nextPresence);
       setChatMessages(nextMessages);
       setMapMarkers(nextMapMarkers);
+      setMemberRoutes(nextMemberRoutes);
       const normalizedRoutePlan = normalizeRoutePlan(nextRoutePlan);
       const nextRouteSignature = routePlanSignature(normalizedRoutePlan);
 
@@ -412,6 +434,14 @@ export function ExpensePlanner() {
       setMapMarkers(await fetchTripMapMarkers(targetTripId));
     } catch {
       // Map markers are shared hints; stale markers should not block route work.
+    }
+  }, [selectedTripId]);
+
+  const loadMemberRoutes = useCallback(async (targetTripId = selectedTripId) => {
+    try {
+      setMemberRoutes(await fetchMemberRoutes(targetTripId));
+    } catch {
+      // Member routes are a shared overlay; the main trip remains usable if this refresh fails.
     }
   }, [selectedTripId]);
 
@@ -596,7 +626,11 @@ export function ExpensePlanner() {
   const activeMembers = useMemo(() => members.filter((member) => member.active), [members]);
   const currentTripRole = activeMembers.find((member) => member.id === currentUser?.id)?.role ?? "viewer";
   const canManageTripMembers = currentTripRole === "owner";
+  const isCurrentTripMember = Boolean(currentUser && activeMembers.some((member) => member.id === currentUser.id));
+  const canCreateMemberRoute = isCurrentTripMember;
+  const canManageMemberRoutes = currentTripRole === "owner";
   const activeTrip = trips.find((trip) => trip.id === selectedTripId);
+  const visibleMemberRouteSet = useMemo(() => new Set(visibleMemberRouteIds), [visibleMemberRouteIds]);
   const syncStatusValue = queuedExpenseCount
     ? `Cho ${queuedExpenseCount}`
     : isLiveSyncConnected
@@ -623,6 +657,16 @@ export function ExpensePlanner() {
   }, [activeTrip?.id, currentUser, loadTripPois, routePlan?.generatedAt, routePlan?.totalDistanceKm, selectedPoiKinds]);
 
   useEffect(() => {
+    setVisibleMemberRouteIds((current) => {
+      const currentSet = new Set(current);
+      const nextIds = memberRoutes.map((route) => route.id);
+      const nextVisible = nextIds.filter((id) => currentSet.has(id));
+      const newIds = nextIds.filter((id) => !currentSet.has(id));
+      return [...nextVisible, ...newIds];
+    });
+  }, [memberRoutes]);
+
+  useEffect(() => {
     if (!currentUser || !activeTrip?.id) {
       setIsLiveSyncConnected(false);
       return;
@@ -635,6 +679,7 @@ export function ExpensePlanner() {
         void loadTripPresence(activeTrip.id);
         void loadTripMessages(activeTrip.id);
         void loadTripMapMarkers(activeTrip.id);
+        void loadMemberRoutes(activeTrip.id);
       },
       onError: () => {
         setIsLiveSyncConnected(false);
@@ -685,6 +730,21 @@ export function ExpensePlanner() {
           return;
         }
 
+        if (event.type === "member_route_changed") {
+          void loadMemberRoutes(activeTrip.id);
+
+          if (event.actorUserId !== currentUser.id) {
+            const displayName = event.actorDisplayName || "Thành viên";
+            setPresenceNotice({
+              id: event.id,
+              message: `${displayName} vừa cập nhật tuyến riêng`,
+              tone: "join",
+            });
+          }
+
+          return;
+        }
+
         if (event.type === "trip_changed" || event.type === "trip_deleted") {
           void loadTripData({ silent: true });
           return;
@@ -713,7 +773,7 @@ export function ExpensePlanner() {
       setIsLiveSyncConnected(false);
       unsubscribe();
     };
-  }, [activeTrip?.id, currentUser, isChatOpen, loadTripData, loadTripLocations, loadTripMapMarkers, loadTripMessages, loadTripPresence]);
+  }, [activeTrip?.id, currentUser, isChatOpen, loadMemberRoutes, loadTripData, loadTripLocations, loadTripMapMarkers, loadTripMessages, loadTripPresence]);
 
   useEffect(() => {
     return () => {
@@ -1048,6 +1108,57 @@ export function ExpensePlanner() {
       setIsUsingCurrentLocation(false);
       setIsPlanningRoute(false);
     }
+  }
+
+  async function handleSaveOwnerRoute() {
+    if (!canCreateMemberRoute) {
+      setApiError("Bạn cần là thành viên trong phòng để lưu tuyến riêng.");
+      return;
+    }
+
+    if ((!routeOrigin.trim() && !routeOriginCoordinate) || !routeDestination.trim() || isSavingMemberRoute) {
+      return;
+    }
+
+    setIsSavingMemberRoute(true);
+    setApiError(null);
+
+    try {
+      const memberRoute = await createMemberRoute({
+        origin: routeOriginCoordinate ? routeOrigin.trim() || "Vị trí của bạn" : routeOrigin.trim(),
+        destination: routeDestination.trim(),
+        ...(routeOriginCoordinate ? { originCoordinate: routeOriginCoordinate } : {}),
+      }, selectedTripId);
+      setMemberRoutes((current) => [memberRoute, ...current.filter((route) => route.id !== memberRoute.id)]);
+      setActiveTab("route");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không lưu được tuyến riêng");
+    } finally {
+      setIsSavingMemberRoute(false);
+    }
+  }
+
+  async function handleDeleteMemberRoute(route: ApiMemberRoute) {
+    if (route.userId !== currentUser?.id && currentTripRole !== "owner") {
+      setApiError("Bạn không thể xóa tuyến riêng của người khác.");
+      return;
+    }
+
+    setDeletingMemberRouteId(route.id);
+    setApiError(null);
+
+    try {
+      await deleteMemberRoute(route.id, selectedTripId);
+      setMemberRoutes((current) => current.filter((item) => item.id !== route.id));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không xóa được tuyến riêng");
+    } finally {
+      setDeletingMemberRouteId(null);
+    }
+  }
+
+  function handleToggleMemberRoute(routeId: string) {
+    setVisibleMemberRouteIds((current) => (current.includes(routeId) ? current.filter((id) => id !== routeId) : [...current, routeId]));
   }
 
   async function handlePlanRouteToMember(location: ApiMemberLocation) {
@@ -1761,6 +1872,7 @@ export function ExpensePlanner() {
           isPlanningRoute={isPlanningRoute}
           isPlacingMapMarker={isPlacingMapMarker}
           isSavingMapMarker={isSavingMapMarker}
+          isSavingMemberRoute={isSavingMemberRoute}
           isSharingLocation={isSharingLocation}
           isUsingCurrentLocation={isUsingCurrentLocation}
           focusedLocationRequest={focusedLocationRequest}
@@ -1768,11 +1880,14 @@ export function ExpensePlanner() {
           mapMarkerKind={mapMarkerKind}
           mapMarkerLabel={mapMarkerLabel}
           mapMarkers={mapMarkers}
+          memberRoutes={memberRoutes}
+          visibleMemberRouteSet={visibleMemberRouteSet}
           memberLocations={memberLocations}
           pois={tripPois}
           poiKinds={selectedPoiKinds}
           isLoadingPois={isLoadingPois}
           onCreateMapMarker={handleCreateMapMarker}
+          onDeleteMemberRoute={handleDeleteMemberRoute}
           onDeleteMapMarker={handleDeleteMapMarker}
           onDestinationChange={handleRouteDestinationChange}
           onMapMarkerKindChange={setMapMarkerKind}
@@ -1782,6 +1897,8 @@ export function ExpensePlanner() {
           onPlanRouteToPoi={handlePlanRouteToPoi}
           onPlanRoute={handlePlanRoute}
           onPlanRouteFromCurrentLocation={handlePlanRouteFromCurrentLocation}
+          onSaveOwnerRoute={handleSaveOwnerRoute}
+          onToggleMemberRoute={handleToggleMemberRoute}
           onPlanRouteToMapMarker={handlePlanRouteToMapMarker}
           onPlanRouteToMember={handlePlanRouteToMember}
           onSavePoiAsMarker={handleSavePoiAsMarker}
@@ -1794,6 +1911,9 @@ export function ExpensePlanner() {
           pendingMapMarker={pendingMapMarker}
           routePlan={routePlan}
           deletingMapMarkerId={deletingMapMarkerId}
+          deletingMemberRouteId={deletingMemberRouteId}
+          canCreateMemberRoute={canCreateMemberRoute}
+          canManageMemberRoutes={canManageMemberRoutes}
         />
       )}
 
@@ -2512,24 +2632,31 @@ function MemberManagerPanel({
 }
 
 function RouteIntelligence({
+  canManageMemberRoutes,
+  canCreateMemberRoute,
   currentUserId,
   deletingMapMarkerId,
+  deletingMemberRouteId,
   destination,
   focusedLocationRequest,
   isPlanningRoute,
   isPlacingMapMarker,
   isSavingMapMarker,
+  isSavingMemberRoute,
   isSharingLocation,
   isUsingCurrentLocation,
   locationShareStatus,
   mapMarkerKind,
   mapMarkerLabel,
   mapMarkers,
+  memberRoutes,
+  visibleMemberRouteSet,
   memberLocations,
   pois,
   poiKinds,
   isLoadingPois,
   onCreateMapMarker,
+  onDeleteMemberRoute,
   onDeleteMapMarker,
   onDestinationChange,
   onMapMarkerKindChange,
@@ -2539,6 +2666,8 @@ function RouteIntelligence({
   onPlanRouteToPoi,
   onPlanRoute,
   onPlanRouteFromCurrentLocation,
+  onSaveOwnerRoute,
+  onToggleMemberRoute,
   onPlanRouteToMapMarker,
   onPlanRouteToMember,
   onSavePoiAsMarker,
@@ -2551,24 +2680,31 @@ function RouteIntelligence({
   pendingMapMarker,
   routePlan,
 }: {
+  canManageMemberRoutes: boolean;
+  canCreateMemberRoute: boolean;
   currentUserId: string;
   deletingMapMarkerId: string | null;
+  deletingMemberRouteId: string | null;
   destination: string;
   focusedLocationRequest: FocusedLocationRequest | null;
   isPlanningRoute: boolean;
   isPlacingMapMarker: boolean;
   isSavingMapMarker: boolean;
+  isSavingMemberRoute: boolean;
   isSharingLocation: boolean;
   isUsingCurrentLocation: boolean;
   locationShareStatus: LocationShareStatus;
   mapMarkerKind: ApiMapMarkerKind;
   mapMarkerLabel: string;
   mapMarkers: ApiMapMarker[];
+  memberRoutes: ApiMemberRoute[];
+  visibleMemberRouteSet: Set<string>;
   memberLocations: ApiMemberLocation[];
   pois: ApiTripPoi[];
   poiKinds: ApiTripPoiKind[];
   isLoadingPois: boolean;
   onCreateMapMarker: (event: FormEvent<HTMLFormElement>) => void;
+  onDeleteMemberRoute: (route: ApiMemberRoute) => void;
   onDeleteMapMarker: (marker: ApiMapMarker) => void;
   onDestinationChange: (value: string) => void;
   onMapMarkerKindChange: (kind: ApiMapMarkerKind) => void;
@@ -2578,6 +2714,8 @@ function RouteIntelligence({
   onPlanRouteToPoi: (poi: ApiTripPoi) => void;
   onPlanRoute: (event: FormEvent<HTMLFormElement>) => void;
   onPlanRouteFromCurrentLocation: () => void;
+  onSaveOwnerRoute: () => void;
+  onToggleMemberRoute: (routeId: string) => void;
   onPlanRouteToMapMarker: (marker: ApiMapMarker) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
   onSavePoiAsMarker: (poi: ApiTripPoi) => void;
@@ -2592,6 +2730,10 @@ function RouteIntelligence({
 }) {
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [isRideMode, setIsRideMode] = useState(false);
+  const visibleMemberRoutes = useMemo(
+    () => memberRoutes.filter((route) => visibleMemberRouteSet.has(route.id)),
+    [memberRoutes, visibleMemberRouteSet],
+  );
   const currentWaypoint = routePlan.waypoints.find((waypoint) => waypoint.weather.riskLevel !== "low" || waypoint.stop?.priority === "required") ?? routePlan.waypoints[0] ?? null;
   const visibleMembers = memberLocations.filter((location) => location.userId !== currentUserId).slice(0, 3);
   const visiblePois = pois.slice(0, 3);
@@ -2665,6 +2807,12 @@ function RouteIntelligence({
             <Navigation size={17} />
             <span>{isPlanningRoute ? "Đang vẽ..." : "Vẽ tuyến"}</span>
           </button>
+          {canCreateMemberRoute && (
+            <button className="member-route-save-button" type="button" disabled={isSavingMemberRoute || isPlanningRoute || isUsingCurrentLocation} onClick={onSaveOwnerRoute}>
+              <Users size={17} />
+              <span>{isSavingMemberRoute ? "Đang lưu..." : "Lưu tuyến riêng"}</span>
+            </button>
+          )}
         </div>
       </form>
 
@@ -2694,6 +2842,7 @@ function RouteIntelligence({
             isFullscreen={isMapFullscreen}
             isPlacingMapMarker={isPlacingMapMarker}
             mapMarkers={mapMarkers}
+            memberRoutes={visibleMemberRoutes}
             memberLocations={memberLocations}
             onMapMarkerPointSelected={onMapMarkerPointSelected}
             onPlanRouteToMember={onPlanRouteToMember}
@@ -2712,23 +2861,23 @@ function RouteIntelligence({
             <MiniMetric label="Cửa khẩu" value={`${routePlan.summary.borderAlerts}`} />
           </div>
           {isRideMode && (
-            <div className="ride-cockpit" aria-label="Ch? ?? ?ang ?i">
+            <div className="ride-cockpit" aria-label="Chế độ đang đi">
               <div className="ride-status-card">
                 <div>
-                  <span className="eyebrow">?ang ?i</span>
+                  <span className="eyebrow">Đang đi</span>
                   <strong>{routePlan.destination}</strong>
                 </div>
                 <p>
                   {currentWaypoint
-                    ? `${currentWaypoint.weather.condition}, ${currentWaypoint.weather.tempC}?C ? m?a ${currentWaypoint.weather.rainChance}%`
-                    : "Ch?a c? d? li?u th?i ti?t"}
+                    ? `${currentWaypoint.weather.condition}, ${currentWaypoint.weather.tempC}°C · mưa ${currentWaypoint.weather.rainChance}%`
+                    : "Chưa có dữ liệu thời tiết"}
                 </p>
               </div>
 
               <div className="ride-action-grid">
                 <button className={isSharingLocation ? "active" : ""} type="button" onClick={isSharingLocation ? onStopSharingLocation : onStartSharingLocation}>
                   <Navigation size={18} />
-                  <span>{isSharingLocation ? "T?t GPS" : "Chia s? GPS"}</span>
+                  <span>{isSharingLocation ? "Tắt GPS" : "Chia sẻ GPS"}</span>
                 </button>
                 <button className="danger" type="button">
                   <TrailMapIcon kind="sos" />
@@ -2741,12 +2890,12 @@ function RouteIntelligence({
                   visibleMembers.map((location) => (
                     <button key={location.userId} type="button" onClick={() => onPlanRouteToMember(location)} disabled={isPlanningRoute || isUsingCurrentLocation}>
                       <TrailMapIcon kind="member" />
-                      <span>{location.displayName || "Th?nh vi?n"}</span>
-                      <em>?i g?p</em>
+                      <span>{location.displayName || "Thành viên"}</span>
+                      <em>Đi gặp</em>
                     </button>
                   ))
                 ) : (
-                  <p>Ch?a c? th?nh vi?n ?ang chia s? GPS.</p>
+                  <p>Chưa có thành viên đang chia sẻ GPS.</p>
                 )}
               </div>
 
@@ -2760,7 +2909,7 @@ function RouteIntelligence({
                     </button>
                   ))
                 ) : (
-                  <p>Ch?a c? qu?n ?n, ch? ngh? ho?c c?y x?ng g?n tuy?n.</p>
+                  <p>Chưa có quán ăn, chỗ nghỉ hoặc cây xăng gần tuyến.</p>
                 )}
               </div>
             </div>
@@ -2868,6 +3017,50 @@ function RouteIntelligence({
             </div>
           </div>
 
+          <div className="member-route-card">
+            <div className="member-route-head">
+              <div>
+                <span className="eyebrow">Tuyến thành viên</span>
+                <strong>{memberRoutes.length} tuyến riêng</strong>
+              </div>
+              <Users size={18} />
+            </div>
+
+            <div className="member-route-list">
+              {memberRoutes.length ? (
+                memberRoutes.map((route) => {
+                  const isRouteVisible = visibleMemberRouteSet.has(route.id);
+
+                  return (
+                    <div className={isRouteVisible ? "member-route-row" : "member-route-row hidden"} key={route.id}>
+                      <span style={{ background: memberRouteColor(route.userId) }} />
+                      <div>
+                        <strong>{route.displayName}</strong>
+                        <small>
+                          {route.routePlan.totalDistanceKm} km · {formatDuration(route.routePlan.durationMinutes)}
+                        </small>
+                      </div>
+                      <button
+                        className={isRouteVisible ? "member-route-visible-button active" : "member-route-visible-button"}
+                        type="button"
+                        onClick={() => onToggleMemberRoute(route.id)}
+                      >
+                        {isRouteVisible ? "Ẩn" : "Hiện"}
+                      </button>
+                      {(route.userId === currentUserId || canManageMemberRoutes) && (
+                        <button className="member-route-delete-button" type="button" disabled={deletingMemberRouteId === route.id} onClick={() => onDeleteMemberRoute(route)}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p>Chưa có tuyến riêng của thành viên.</p>
+              )}
+            </div>
+          </div>
+
           <form className="map-marker-card" onSubmit={onCreateMapMarker}>
             <div className="map-marker-head">
               <div>
@@ -2948,6 +3141,7 @@ function OpenStreetRouteMap({
   isFullscreen,
   isPlacingMapMarker,
   mapMarkers,
+  memberRoutes,
   memberLocations,
   onMapMarkerPointSelected,
   onPlanRouteToMember,
@@ -2959,6 +3153,7 @@ function OpenStreetRouteMap({
   isFullscreen: boolean;
   isPlacingMapMarker: boolean;
   mapMarkers: ApiMapMarker[];
+  memberRoutes: ApiMemberRoute[];
   memberLocations: ApiMemberLocation[];
   onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
@@ -2973,6 +3168,7 @@ function OpenStreetRouteMap({
   const userAccuracyRef = useRef<import("leaflet").Circle | null>(null);
   const memberLocationLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const mapMarkerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const memberRouteLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const poiLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const [status, setStatus] = useState<LeafletMapStatus>("loading");
   const [isFollowingUser, setIsFollowingUser] = useState(false);
@@ -3007,6 +3203,11 @@ function OpenStreetRouteMap({
   const clearMapMarkerLayer = useCallback(() => {
     mapMarkerLayerRef.current?.remove();
     mapMarkerLayerRef.current = null;
+  }, []);
+
+  const clearMemberRouteLayer = useCallback(() => {
+    memberRouteLayerRef.current?.remove();
+    memberRouteLayerRef.current = null;
   }, []);
 
   const clearPoiLayer = useCallback(() => {
@@ -3312,6 +3513,75 @@ function OpenStreetRouteMap({
   useEffect(() => {
     const map = mapInstanceRef.current;
 
+    if (status !== "ready" || !map) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void import("leaflet").then((leaflet) => {
+      if (cancelled || !mapInstanceRef.current) {
+        return;
+      }
+
+      leafletModuleRef.current = leaflet;
+      clearMemberRouteLayer();
+
+      if (!memberRoutes.length) {
+        return;
+      }
+
+      const layer = leaflet.layerGroup();
+
+      memberRoutes.forEach((memberRoute) => {
+        const points = memberRoute.routePlan.geometry.length ? memberRoute.routePlan.geometry : memberRoute.routePlan.waypoints.map((waypoint) => waypoint.coordinate);
+        const latLngs = points.map((point) => leaflet.latLng(point.lat, point.lng));
+
+        if (latLngs.length < 2) {
+          return;
+        }
+
+        const color = memberRouteColor(memberRoute.userId);
+        const labelPoint = latLngs[Math.floor(latLngs.length / 2)]!;
+
+        leaflet
+          .polyline(latLngs, {
+            className: "member-route-line",
+            color,
+            dashArray: "9 8",
+            lineCap: "round",
+            lineJoin: "round",
+            opacity: 0.92,
+            weight: 5,
+          })
+          .bindPopup(`<strong>Tuyến của ${escapeHtml(memberRoute.displayName)}</strong><br />${escapeHtml(String(memberRoute.routePlan.totalDistanceKm))} km`)
+          .addTo(layer);
+
+        leaflet
+          .marker(labelPoint, {
+            icon: leaflet.divIcon({
+              className: "member-route-label",
+              html: `<span style="--member-route-color:${escapeHtml(color)}">${escapeHtml(memberRoute.displayName)}</span>`,
+              iconAnchor: [54, 14],
+              iconSize: [108, 28],
+            }),
+            interactive: false,
+          })
+          .addTo(layer);
+      });
+
+      layer.addTo(map);
+      memberRouteLayerRef.current = layer;
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearMemberRouteLayer, memberRoutes, status]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
     if (status !== "ready" || !map || !isPlacingMapMarker) {
       return;
     }
@@ -3351,6 +3621,7 @@ function OpenStreetRouteMap({
         clearUserLocationLayer();
         clearMemberLocationLayer();
         clearMapMarkerLayer();
+        clearMemberRouteLayer();
         clearPoiLayer();
         leafletModuleRef.current = leaflet;
 
@@ -3415,9 +3686,10 @@ function OpenStreetRouteMap({
       clearUserLocationLayer();
       clearMemberLocationLayer();
       clearMapMarkerLayer();
+      clearMemberRouteLayer();
       clearPoiLayer();
     };
-  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearPoiLayer, clearUserLocationLayer, routePlan]);
+  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearMemberRouteLayer, clearPoiLayer, clearUserLocationLayer, routePlan]);
 
   useEffect(() => {
     return () => {
@@ -3577,6 +3849,10 @@ function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
 
   if (type === "member_changed") {
     return "nhóm vừa đổi";
+  }
+
+  if (type === "member_route_changed") {
+    return "tuyến riêng vừa đổi";
   }
 
   if (type === "message_created") {

@@ -176,6 +176,16 @@ export type ApiRoutePlan = {
   waypoints: ApiRouteWaypoint[];
 };
 
+export type ApiMemberRoute = {
+  id: string;
+  tripId: string;
+  userId: string;
+  displayName: string;
+  routePlan: ApiRoutePlan;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ApiMemberLocation = {
   tripId: string;
   userId: string;
@@ -251,6 +261,7 @@ export type ApiTripLiveEvent = {
     | "expense_created"
     | "member_changed"
     | "route_plan_updated"
+    | "member_route_changed"
     | "message_created"
     | "map_marker_changed"
     | "trip_changed"
@@ -520,6 +531,46 @@ export async function planRoute(
   });
   const data = await parseApiResponse<{ routePlan: ApiRoutePlan }>(response);
   return data.routePlan;
+}
+
+export async function fetchMemberRoutes(targetTripId = defaultTripId): Promise<ApiMemberRoute[]> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/member-routes`, {
+    cache: "no-store",
+  });
+  const data = await parseApiResponse<{ memberRoutes: ApiMemberRoute[] }>(response);
+  return data.memberRoutes;
+}
+
+export async function createMemberRoute(
+  payload: {
+    origin: string;
+    destination: string;
+    originCoordinate?: ApiGeoPoint;
+    destinationCoordinate?: ApiGeoPoint;
+  },
+  targetTripId = defaultTripId,
+): Promise<ApiMemberRoute> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/member-routes`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseApiResponse<{ memberRoute: ApiMemberRoute }>(response);
+  return data.memberRoute;
+}
+
+export async function deleteMemberRoute(routeId: string, targetTripId = defaultTripId): Promise<void> {
+  const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/member-routes/${routeId}`, {
+    method: "DELETE",
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  await parseApiResponse(response);
 }
 
 export async function shareMyLocation(
