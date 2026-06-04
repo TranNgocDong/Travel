@@ -145,6 +145,20 @@ const poiFilters: Array<{ id: ApiTripPoiKind; label: string }> = [
 const locationShareIntervalMs = 15_000;
 const mapIconBasePath = "/map-icons";
 type TrailIconKind = ApiMapMarkerKind | ApiTripPoiKind | "member" | "sos";
+type SavedPlaceSource = "recent" | "poi" | "marker";
+
+type SavedPlace = {
+  id: string;
+  label: string;
+  subtitle: string;
+  source: SavedPlaceSource;
+  coordinate: ApiGeoPoint | null;
+  lastUsedAt: string;
+  useCount: number;
+};
+
+const savedPlacesStorageKey = "trailledger:saved-places:v1";
+const maxSavedPlaces = 18;
 
 function mapMarkerIconPath(kind: ApiMapMarkerKind): string {
   return trailIconPath(kind);
@@ -156,6 +170,137 @@ function poiIconPath(kind: ApiTripPoiKind): string {
 
 function trailIconPath(kind: TrailIconKind): string {
   return `${mapIconBasePath}/${kind}.svg`;
+}
+
+function normalizePlaceText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function savedPlaceKey(label: string, coordinate?: ApiGeoPoint | null): string {
+  const normalizedLabel = normalizePlaceText(label).toLowerCase();
+
+  if (!coordinate) {
+    return `text:${normalizedLabel}`;
+  }
+
+  return `geo:${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}:${normalizedLabel}`;
+}
+
+function readSavedPlaces(): SavedPlace[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(savedPlacesStorageKey);
+
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsed = JSON.parse(rawValue) as SavedPlace[];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((place) => typeof place?.label === "string" && place.label.trim())
+      .slice(0, maxSavedPlaces);
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedPlaces(places: SavedPlace[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(savedPlacesStorageKey, JSON.stringify(places.slice(0, maxSavedPlaces)));
+  } catch {
+    // Local storage can be blocked in private mode; suggestions simply become session-only.
+  }
+}
+
+function mergeSavedPlace(current: SavedPlace[], nextPlace: Omit<SavedPlace, "id" | "lastUsedAt" | "useCount">): SavedPlace[] {
+  const label = normalizePlaceText(nextPlace.label);
+
+  if (!label) {
+    return current;
+  }
+
+  const id = savedPlaceKey(label, nextPlace.coordinate);
+  const existing = current.find((place) => place.id === id);
+  const mergedPlace: SavedPlace = {
+    id,
+    label,
+    subtitle: nextPlace.subtitle,
+    source: nextPlace.source,
+    coordinate: nextPlace.coordinate,
+    lastUsedAt: new Date().toISOString(),
+    useCount: (existing?.useCount ?? 0) + 1,
+  };
+
+  return [mergedPlace, ...current.filter((place) => place.id !== id)].slice(0, maxSavedPlaces);
+}
+
+function savedPlaceFromMarker(marker: ApiMapMarker): SavedPlace {
+  return {
+    id: savedPlaceKey(marker.label, { lat: marker.latitude, lng: marker.longitude }),
+    label: marker.label,
+    subtitle: mapMarkerKindLabel(marker.kind),
+    source: "marker",
+    coordinate: { lat: marker.latitude, lng: marker.longitude },
+    lastUsedAt: marker.createdAt,
+    useCount: 1,
+  };
+}
+
+function savedPlaceFromPoi(poi: ApiTripPoi): SavedPlace {
+  return {
+    id: savedPlaceKey(poi.name, { lat: poi.latitude, lng: poi.longitude }),
+    label: poi.name,
+    subtitle: `${poiKindLabel(poi.kind)} · ${poi.distanceFromRouteKm.toFixed(1)} km`,
+    source: "poi",
+    coordinate: { lat: poi.latitude, lng: poi.longitude },
+    lastUsedAt: "",
+    useCount: 1,
+  };
+}
+
+function buildPlaceSuggestions(query: string, places: SavedPlace[]): SavedPlace[] {
+  const normalizedQuery = normalizePlaceText(query).toLowerCase();
+
+  return places
+    .filter((place) => {
+      if (!normalizedQuery) {
+        return place.source === "recent" || place.source === "marker";
+      }
+
+      return `${place.label} ${place.subtitle}`.toLowerCase().includes(normalizedQuery);
+    })
+    .sort((left, right) => {
+      if (left.source !== right.source) {
+        return left.source === "recent" ? -1 : right.source === "recent" ? 1 : 0;
+      }
+
+      return right.useCount - left.useCount;
+    })
+    .slice(0, 6);
+}
+
+function placeSourceLabel(source: SavedPlaceSource): string {
+  if (source === "recent") {
+    return "Gần đây";
+  }
+
+  if (source === "marker") {
+    return "Đã lưu";
+  }
+
+  return "Gần tuyến";
 }
 
 function TrailMapIcon({ kind, className = "trail-map-icon" }: { kind: TrailIconKind; className?: string }) {
@@ -207,6 +352,8 @@ export function ExpensePlanner() {
   const [routeOrigin, setRouteOrigin] = useState("");
   const [routeOriginCoordinate, setRouteOriginCoordinate] = useState<ApiGeoPoint | null>(null);
   const [routeDestination, setRouteDestination] = useState("");
+  const [routeDestinationCoordinate, setRouteDestinationCoordinate] = useState<ApiGeoPoint | null>(null);
+  const [savedPlaces, setSavedPlaces] = useState<SavedPlace[]>([]);
   const [isPlacingMapMarker, setIsPlacingMapMarker] = useState(false);
   const [pendingMapMarker, setPendingMapMarker] = useState<ApiGeoPoint | null>(null);
   const [mapMarkerLabel, setMapMarkerLabel] = useState("");
@@ -255,6 +402,34 @@ export function ExpensePlanner() {
   const lastSharedPositionAtRef = useRef(0);
   const chatMessageListRef = useRef<HTMLDivElement | null>(null);
 
+  const placeSuggestions = useMemo(() => {
+    const byId = new globalThis.Map<string, SavedPlace>();
+
+    for (const place of savedPlaces) {
+      byId.set(place.id, place);
+    }
+
+    for (const marker of mapMarkers) {
+      const place = savedPlaceFromMarker(marker);
+      byId.set(place.id, byId.get(place.id) ?? place);
+    }
+
+    for (const poi of tripPois) {
+      const place = savedPlaceFromPoi(poi);
+      byId.set(place.id, byId.get(place.id) ?? place);
+    }
+
+    return Array.from(byId.values());
+  }, [mapMarkers, savedPlaces, tripPois]);
+
+  const rememberPlace = useCallback((place: Omit<SavedPlace, "id" | "lastUsedAt" | "useCount">) => {
+    setSavedPlaces((current) => {
+      const nextPlaces = mergeSavedPlace(current, place);
+      writeSavedPlaces(nextPlaces);
+      return nextPlaces;
+    });
+  }, []);
+
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
     const safeRoutePlan = normalizeRoutePlan(nextRoutePlan);
 
@@ -264,6 +439,7 @@ export function ExpensePlanner() {
     setRouteOrigin(safeRoutePlan.origin);
     setRouteOriginCoordinate(null);
     setRouteDestination(safeRoutePlan.destination);
+    setRouteDestinationCoordinate(null);
     setFocusedLocationRequest(null);
     setOfflineReady(true);
     setIsUsingOfflineRoute(Boolean(options.fromCache));
@@ -488,6 +664,7 @@ export function ExpensePlanner() {
     const nextTheme = savedTheme === "dark" ? "dark" : "light";
     setTheme(nextTheme);
     document.documentElement.dataset.theme = nextTheme;
+    setSavedPlaces(readSavedPlaces());
     refreshQueuedExpenseCount();
 
     const savedTripId = window.localStorage.getItem(selectedTripCacheKey());
@@ -1044,6 +1221,31 @@ export function ExpensePlanner() {
   function handleRouteDestinationChange(value: string) {
     routeFormDirtyRef.current = true;
     setRouteDestination(value);
+    setRouteDestinationCoordinate(null);
+  }
+
+  function handleOriginPlaceSelect(place: SavedPlace) {
+    routeFormDirtyRef.current = true;
+    setRouteOrigin(place.label);
+    setRouteOriginCoordinate(place.coordinate);
+    rememberPlace({
+      label: place.label,
+      subtitle: place.subtitle,
+      source: "recent",
+      coordinate: place.coordinate,
+    });
+  }
+
+  function handleDestinationPlaceSelect(place: SavedPlace) {
+    routeFormDirtyRef.current = true;
+    setRouteDestination(place.label);
+    setRouteDestinationCoordinate(place.coordinate);
+    rememberPlace({
+      label: place.label,
+      subtitle: place.subtitle,
+      source: "recent",
+      coordinate: place.coordinate,
+    });
   }
 
   async function handlePlanRoute(event: FormEvent<HTMLFormElement>) {
@@ -1061,8 +1263,21 @@ export function ExpensePlanner() {
         origin: routeOriginCoordinate ? routeOrigin.trim() || "Vị trí của bạn" : routeOrigin.trim(),
         destination: routeDestination.trim(),
         ...(routeOriginCoordinate ? { originCoordinate: routeOriginCoordinate } : {}),
+        ...(routeDestinationCoordinate ? { destinationCoordinate: routeDestinationCoordinate } : {}),
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      rememberPlace({
+        label: nextRoutePlan.origin,
+        subtitle: "Điểm đi đã dùng",
+        source: "recent",
+        coordinate: routeOriginCoordinate,
+      });
+      rememberPlace({
+        label: nextRoutePlan.destination,
+        subtitle: "Điểm đến đã dùng",
+        source: "recent",
+        coordinate: routeDestinationCoordinate,
+      });
       setActiveTab("route");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Không vẽ được tuyến");
@@ -1099,8 +1314,15 @@ export function ExpensePlanner() {
         origin: "Vị trí của tôi",
         destination: routeDestination.trim(),
         originCoordinate,
+        ...(routeDestinationCoordinate ? { destinationCoordinate: routeDestinationCoordinate } : {}),
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      rememberPlace({
+        label: nextRoutePlan.destination,
+        subtitle: "Điểm đến đã dùng",
+        source: "recent",
+        coordinate: routeDestinationCoordinate,
+      });
       setActiveTab("route");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Không lấy được vị trí hiện tại");
@@ -1128,6 +1350,7 @@ export function ExpensePlanner() {
         origin: routeOriginCoordinate ? routeOrigin.trim() || "Vị trí của bạn" : routeOrigin.trim(),
         destination: routeDestination.trim(),
         ...(routeOriginCoordinate ? { originCoordinate: routeOriginCoordinate } : {}),
+        ...(routeDestinationCoordinate ? { destinationCoordinate: routeDestinationCoordinate } : {}),
       }, selectedTripId);
       setMemberRoutes((current) => [memberRoute, ...current.filter((route) => route.id !== memberRoute.id)]);
       setActiveTab("route");
@@ -1196,6 +1419,7 @@ export function ExpensePlanner() {
       setRouteOrigin("Vị trí của tôi");
       setRouteOriginCoordinate(originCoordinate);
       setRouteDestination(destinationName);
+      setRouteDestinationCoordinate(destinationCoordinate);
       setFocusedLocationRequest({
         userId: location.userId,
         requestedAt: Date.now(),
@@ -1208,6 +1432,12 @@ export function ExpensePlanner() {
         destinationCoordinate,
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      rememberPlace({
+        label: destinationName,
+        subtitle: "Thành viên trong nhóm",
+        source: "recent",
+        coordinate: destinationCoordinate,
+      });
       setActiveTab("route");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới thành viên");
@@ -1330,6 +1560,7 @@ export function ExpensePlanner() {
       setRouteOrigin("Vị trí của tôi");
       setRouteOriginCoordinate(originCoordinate);
       setRouteDestination(marker.label);
+      setRouteDestinationCoordinate(destinationCoordinate);
 
       const nextRoutePlan = await planRoute({
         origin: "Vị trí của tôi",
@@ -1338,6 +1569,12 @@ export function ExpensePlanner() {
         destinationCoordinate,
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      rememberPlace({
+        label: marker.label,
+        subtitle: mapMarkerKindLabel(marker.kind),
+        source: "recent",
+        coordinate: destinationCoordinate,
+      });
       setActiveTab("route");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới điểm đánh dấu");
@@ -1385,6 +1622,7 @@ export function ExpensePlanner() {
       setRouteOrigin("Vị trí của tôi");
       setRouteOriginCoordinate(originCoordinate);
       setRouteDestination(poi.name);
+      setRouteDestinationCoordinate(destinationCoordinate);
 
       const nextRoutePlan = await planRoute({
         origin: "Vị trí của tôi",
@@ -1393,6 +1631,12 @@ export function ExpensePlanner() {
         destinationCoordinate,
       }, selectedTripId);
       applyRoutePlan(nextRoutePlan, { tripId: selectedTripId });
+      rememberPlace({
+        label: poi.name,
+        subtitle: `${poiKindLabel(poi.kind)} · ${poi.distanceFromRouteKm.toFixed(1)} km`,
+        source: "recent",
+        coordinate: destinationCoordinate,
+      });
       setActiveTab("route");
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Không vẽ được đường tới địa điểm này");
@@ -1881,6 +2125,7 @@ export function ExpensePlanner() {
           mapMarkerLabel={mapMarkerLabel}
           mapMarkers={mapMarkers}
           memberRoutes={memberRoutes}
+          placeSuggestions={placeSuggestions}
           visibleMemberRouteSet={visibleMemberRouteSet}
           memberLocations={memberLocations}
           pois={tripPois}
@@ -1893,7 +2138,9 @@ export function ExpensePlanner() {
           onMapMarkerKindChange={setMapMarkerKind}
           onMapMarkerLabelChange={setMapMarkerLabel}
           onMapMarkerPointSelected={handleMapMarkerPointSelected}
+          onOriginPlaceSelect={handleOriginPlaceSelect}
           onOriginChange={handleRouteOriginChange}
+          onDestinationPlaceSelect={handleDestinationPlaceSelect}
           onPlanRouteToPoi={handlePlanRouteToPoi}
           onPlanRoute={handlePlanRoute}
           onPlanRouteFromCurrentLocation={handlePlanRouteFromCurrentLocation}
@@ -2631,6 +2878,27 @@ function MemberManagerPanel({
   );
 }
 
+function PlaceSuggestionList({ suggestions, onSelect }: { suggestions: SavedPlace[]; onSelect: (place: SavedPlace) => void }) {
+  if (!suggestions.length) {
+    return null;
+  }
+
+  return (
+    <div className="place-suggestion-list">
+      {suggestions.map((place) => (
+        <button key={place.id} type="button" onClick={() => onSelect(place)}>
+          <MapPin size={15} />
+          <span>
+            <strong>{place.label}</strong>
+            <small>{place.subtitle || placeSourceLabel(place.source)}</small>
+          </span>
+          <em>{placeSourceLabel(place.source)}</em>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function RouteIntelligence({
   canManageMemberRoutes,
   canCreateMemberRoute,
@@ -2650,6 +2918,7 @@ function RouteIntelligence({
   mapMarkerLabel,
   mapMarkers,
   memberRoutes,
+  placeSuggestions,
   visibleMemberRouteSet,
   memberLocations,
   pois,
@@ -2662,7 +2931,9 @@ function RouteIntelligence({
   onMapMarkerKindChange,
   onMapMarkerLabelChange,
   onMapMarkerPointSelected,
+  onOriginPlaceSelect,
   onOriginChange,
+  onDestinationPlaceSelect,
   onPlanRouteToPoi,
   onPlanRoute,
   onPlanRouteFromCurrentLocation,
@@ -2698,6 +2969,7 @@ function RouteIntelligence({
   mapMarkerLabel: string;
   mapMarkers: ApiMapMarker[];
   memberRoutes: ApiMemberRoute[];
+  placeSuggestions: SavedPlace[];
   visibleMemberRouteSet: Set<string>;
   memberLocations: ApiMemberLocation[];
   pois: ApiTripPoi[];
@@ -2710,7 +2982,9 @@ function RouteIntelligence({
   onMapMarkerKindChange: (kind: ApiMapMarkerKind) => void;
   onMapMarkerLabelChange: (value: string) => void;
   onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
+  onOriginPlaceSelect: (place: SavedPlace) => void;
   onOriginChange: (value: string) => void;
+  onDestinationPlaceSelect: (place: SavedPlace) => void;
   onPlanRouteToPoi: (poi: ApiTripPoi) => void;
   onPlanRoute: (event: FormEvent<HTMLFormElement>) => void;
   onPlanRouteFromCurrentLocation: () => void;
@@ -2737,6 +3011,9 @@ function RouteIntelligence({
   const currentWaypoint = routePlan.waypoints.find((waypoint) => waypoint.weather.riskLevel !== "low" || waypoint.stop?.priority === "required") ?? routePlan.waypoints[0] ?? null;
   const visibleMembers = memberLocations.filter((location) => location.userId !== currentUserId).slice(0, 3);
   const visiblePois = pois.slice(0, 3);
+  const originSuggestions = buildPlaceSuggestions(origin, placeSuggestions);
+  const destinationSuggestions = buildPlaceSuggestions(destination, placeSuggestions);
+  const recentPlaceShortcuts = placeSuggestions.filter((place) => place.source === "recent").slice(0, 4);
 
   function handleRideModeToggle() {
     setIsRideMode((current) => {
@@ -2789,15 +3066,28 @@ function RouteIntelligence({
       </div>
 
       <form className="route-builder" onSubmit={onPlanRoute}>
-        <label>
+        <label className="place-field">
           <span>Điểm đi</span>
           <input value={origin} onChange={(event) => onOriginChange(event.target.value)} placeholder="Điểm xuất phát" />
+          <PlaceSuggestionList suggestions={originSuggestions} onSelect={onOriginPlaceSelect} />
         </label>
-        <label>
+        <label className="place-field">
           <span>Điểm đến</span>
           <input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder="Điểm đến" />
+          <PlaceSuggestionList suggestions={destinationSuggestions} onSelect={onDestinationPlaceSelect} />
         </label>
         {originCoordinate && <p className="route-gps-note">Đang dùng GPS làm điểm xuất phát.</p>}
+        {recentPlaceShortcuts.length > 0 && (
+          <div className="route-place-shortcuts" aria-label="Địa điểm đã dùng gần đây">
+            <span>Gần đây</span>
+            {recentPlaceShortcuts.map((place) => (
+              <button key={place.id} type="button" onClick={() => onDestinationPlaceSelect(place)}>
+                <MapPin size={14} />
+                {place.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="route-builder-actions">
           <button className="location-route-button" type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={onPlanRouteFromCurrentLocation}>
             <MapPin size={17} />

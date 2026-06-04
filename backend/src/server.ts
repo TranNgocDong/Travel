@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 
+import { InMemoryTripAuditRepository, PostgresTripAuditRepository, type TripAuditAction, type TripAuditRepository } from "./audit/tripAuditRepository.js";
 import { verifyFirebaseBearerToken } from "./auth/firebaseAuth.js";
 import { toSafeUser, type UserAccount } from "./auth/types.js";
 import { displayNameFromEmail, isValidEmail, normalizeEmail, userIdFromEmail } from "./auth/userIdentity.js";
@@ -55,6 +56,7 @@ const locationRepository: TripMemberLocationRepository = pool
   : new InMemoryTripMemberLocationRepository();
 const routePlanRepository: RoutePlanRepository = pool ? new PostgresRoutePlanRepository(pool) : new InMemoryRoutePlanRepository();
 const memberRouteRepository: MemberRouteRepository = pool ? new PostgresMemberRouteRepository(pool) : new InMemoryMemberRouteRepository();
+const auditRepository: TripAuditRepository = pool ? new PostgresTripAuditRepository(pool) : new InMemoryTripAuditRepository();
 const tripRepository: TripRepository = pool ? new PostgresTripRepository(pool) : new InMemoryTripRepository();
 const tripAccess = new TripAccessService(memberRepository);
 const storageMode = pool ? "postgres" : "memory";
@@ -168,6 +170,15 @@ app.post("/api/v1/trips", async (request, reply) => {
     removedAt: null,
   });
   await tripRepository.linkUser(trip.id, user.id, "owner");
+  await recordAuditEvent({
+    tripId: trip.id,
+    actor: user,
+    action: "trip_created",
+    resourceId: trip.id,
+    metadata: {
+      currency: trip.currency,
+    },
+  });
 
   return reply.status(201).send({
     trip: {
@@ -209,6 +220,15 @@ app.patch("/api/v1/trips/:tripId/status", async (request, reply) => {
   }
 
   publishTripChange(tripId, user.id, "trip_changed", user.displayName);
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "trip_status_changed",
+    resourceId: tripId,
+    metadata: {
+      status: parsed.status,
+    },
+  });
 
   return {
     trip: {
@@ -231,10 +251,34 @@ app.delete("/api/v1/trips/:tripId", async (request, reply) => {
     return;
   }
 
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "trip_deleted",
+    resourceId: tripId,
+  });
   await tripRepository.delete(tripId);
   publishTripChange(tripId, user.id, "trip_deleted", user.displayName);
 
   return reply.status(204).send();
+});
+
+app.get("/api/v1/trips/:tripId/audit-events", async (request, reply) => {
+  const { tripId } = parseTripParams(request.params, reply);
+
+  if (!tripId) {
+    return;
+  }
+
+  const user = await requireAuth(request, reply);
+
+  if (!user || !(await requireTripRole(reply, tripId, user.id, "manage"))) {
+    return;
+  }
+
+  return {
+    events: await auditRepository.listByTrip(tripId, parseAuditLimit(request.query)),
+  };
 });
 
 app.get("/api/v1/trips/:tripId/bootstrap", async (request, reply) => {
@@ -457,6 +501,16 @@ app.post("/api/v1/trips/:tripId/route-plan", async (request, reply) => {
     const routePlan = await buildOpenStreetRoutePlan(tripId, parsed.input);
     const savedRoutePlan = await routePlanRepository.save(tripId, user.id, routePlan);
     publishTripChange(tripId, user.id, "route_plan_updated");
+    await recordAuditEvent({
+      tripId,
+      actor: user,
+      action: "route_plan_updated",
+      resourceId: tripId,
+      metadata: {
+        destination: savedRoutePlan.destination,
+        distanceKm: savedRoutePlan.totalDistanceKm,
+      },
+    });
 
     return {
       routePlan: savedRoutePlan,
@@ -519,6 +573,16 @@ app.post("/api/v1/trips/:tripId/member-routes", async (request, reply) => {
       },
     });
     publishTripChange(tripId, user.id, "member_route_changed", user.displayName);
+    await recordAuditEvent({
+      tripId,
+      actor: user,
+      action: "member_route_saved",
+      resourceId: memberRoute.id,
+      metadata: {
+        destination: memberRoute.routePlan.destination,
+        distanceKm: memberRoute.routePlan.totalDistanceKm,
+      },
+    });
 
     return reply.status(201).send({
       memberRoute,
@@ -562,6 +626,13 @@ app.delete("/api/v1/trips/:tripId/member-routes/:routeId", async (request, reply
 
   await memberRouteRepository.remove(tripId, routeId);
   publishTripChange(tripId, user.id, "member_route_changed", user.displayName);
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "member_route_deleted",
+    targetUserId: route.userId,
+    resourceId: routeId,
+  });
 
   return reply.status(204).send();
 });
@@ -614,6 +685,15 @@ app.post("/api/v1/trips/:tripId/map-markers", async (request, reply) => {
     ...parsed.marker,
   });
   publishTripChange(tripId, user.id, "map_marker_changed", user.displayName);
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "map_marker_created",
+    resourceId: marker.id,
+    metadata: {
+      kind: marker.kind,
+    },
+  });
 
   return reply.status(201).send({
     marker,
@@ -661,6 +741,16 @@ app.delete("/api/v1/trips/:tripId/map-markers/:markerId", async (request, reply)
 
   await mapMarkerRepository.remove(tripId, markerId);
   publishTripChange(tripId, user.id, "map_marker_changed", user.displayName);
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "map_marker_deleted",
+    targetUserId: marker.userId,
+    resourceId: markerId,
+    metadata: {
+      kind: marker.kind,
+    },
+  });
 
   return reply.status(204).send();
 });
@@ -846,6 +936,15 @@ app.post("/api/v1/trips/:tripId/members", async (request, reply) => {
     const addedMember = await memberRepository.add(tripId, member);
     await tripRepository.linkUser(tripId, addedMember.userId, addedMember.role);
     publishTripChange(tripId, user.id, "member_changed");
+    await recordAuditEvent({
+      tripId,
+      actor: user,
+      action: "member_added",
+      targetUserId: addedMember.userId,
+      metadata: {
+        role: addedMember.role,
+      },
+    });
 
     return reply.status(201).send({
       member: addedMember,
@@ -906,6 +1005,15 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
 
   await tripRepository.linkUser(tripId, updated.userId, updated.role);
   publishTripChange(tripId, user.id, "member_changed");
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "member_role_changed",
+    targetUserId: updated.userId,
+    metadata: {
+      role: updated.role,
+    },
+  });
 
   return {
     member: updated,
@@ -958,6 +1066,15 @@ app.delete("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => 
   await locationRepository.remove(tripId, memberId);
   await tripRepository.unlinkUser(tripId, memberId);
   publishTripChange(tripId, user.id, "member_changed");
+  await recordAuditEvent({
+    tripId,
+    actor: user,
+    action: "member_removed",
+    targetUserId: memberId,
+    metadata: {
+      role: targetMember.role,
+    },
+  });
   return reply.status(204).send();
 });
 
@@ -1039,6 +1156,17 @@ app.post("/api/v1/trips/:tripId/expenses", async (request, reply) => {
   try {
     const savedExpense = await repository.add(tripId, expense);
     publishTripChange(tripId, user.id, "expense_created");
+    await recordAuditEvent({
+      tripId,
+      actor: user,
+      action: "expense_created",
+      resourceId: savedExpense.id,
+      metadata: {
+        currency: savedExpense.money.currency,
+        category: savedExpense.category,
+        participantCount: countExpenseParticipants(savedExpense.split),
+      },
+    });
 
     return reply.status(201).send({
       expense: savedExpense,
@@ -1100,6 +1228,48 @@ function publishTripChange(tripId: string, actorUserId: string, type: LiveSyncEv
   });
 }
 
+async function recordAuditEvent(input: {
+  tripId: string;
+  actor: UserAccount;
+  action: TripAuditAction;
+  targetUserId?: string | null;
+  resourceId?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const auditInput = {
+      id: `audit_${randomUUID()}`,
+      tripId: input.tripId,
+      actorUserId: input.actor.id,
+      actorDisplayName: input.actor.displayName,
+      action: input.action,
+      metadata: scrubAuditMetadata(input.metadata ?? {}),
+      ...(input.targetUserId !== undefined ? { targetUserId: input.targetUserId } : {}),
+      ...(input.resourceId !== undefined ? { resourceId: input.resourceId } : {}),
+    };
+    await auditRepository.create(auditInput);
+  } catch (error) {
+    app.log.warn({ error, tripId: input.tripId, action: input.action }, "Failed to write audit event");
+  }
+}
+
+function scrubAuditMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const safeMetadata: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (typeof value === "string") {
+      safeMetadata[key] = value.slice(0, 160);
+      continue;
+    }
+
+    if (typeof value === "number" || typeof value === "boolean" || value === null) {
+      safeMetadata[key] = value;
+    }
+  }
+
+  return safeMetadata;
+}
+
 async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<UserAccount | null> {
   const authorization = request.headers.authorization;
 
@@ -1151,6 +1321,18 @@ function toSplitParticipants(members: TripMember[]) {
     id: member.userId,
     displayName: member.displayName,
   }));
+}
+
+function countExpenseParticipants(split: ExpenseSplit): number {
+  if (split.type === "equal") {
+    return split.userIds.length;
+  }
+
+  if (split.type === "fixed") {
+    return split.amounts.length;
+  }
+
+  return split.shares.length;
 }
 
 function parseTripParams(params: unknown, reply: FastifyReply): { tripId: string | null } {
@@ -1248,6 +1430,12 @@ function parseMessageLimit(query: unknown): number {
   const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
   const parsed = parseFiniteNumber(input.limit);
   return parsed === null ? 50 : Math.max(1, Math.min(100, Math.trunc(parsed)));
+}
+
+function parseAuditLimit(query: unknown): number {
+  const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
+  const parsed = parseFiniteNumber(input.limit);
+  return parsed === null ? 80 : Math.max(1, Math.min(200, Math.trunc(parsed)));
 }
 
 function parsePoiQuery(query: unknown): { kinds: TripPoiKind[]; limit: number } {
