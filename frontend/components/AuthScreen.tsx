@@ -1,11 +1,11 @@
 "use client";
 
-import { Check, Eye, EyeOff, KeyRound, Languages, LockKeyhole, Mail, Moon, Sun, UserRound, X } from "lucide-react";
+import { Check, Eye, EyeOff, Languages, LockKeyhole, Mail, Moon, Sun, UserRound, X } from "lucide-react";
 import { FormEvent, type CSSProperties, useEffect, useMemo, useState } from "react";
 
 import { login, loginWithApple, loginWithGoogle, registerWithEmail, requestPasswordReset, type ApiUser } from "@/lib/api";
 import { setAutoEnterApp } from "@/lib/authPreferences";
-import { analyzePassword, sanitizeAuthText, validateDisplayName, validateEmail, validateOtp, validatePassword } from "@/lib/authValidation";
+import { analyzePassword, sanitizeAuthText, validateDisplayName, validateEmail, validatePassword } from "@/lib/authValidation";
 
 type AuthMode = "login" | "register";
 
@@ -67,9 +67,6 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
-  const [pendingMfaUser, setPendingMfaUser] = useState<ApiUser | null>(null);
-  const [pendingAutoEnterApp, setPendingAutoEnterApp] = useState(false);
-  const [otp, setOtp] = useState("");
 
   const passwordStrength = useMemo(() => analyzePassword(password), [password]);
   const isLocked = lockUntil !== null && lockUntil > now;
@@ -88,7 +85,6 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
     setMode(nextMode);
     setAuthError(null);
     setResetSent(false);
-    setOtp("");
   }
 
   function registerFailedAttempt() {
@@ -168,8 +164,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           : await login(safeEmail.ok ? safeEmail.value : "", password, rememberMe);
 
       resetFailedAttempts();
-      setPendingAutoEnterApp(rememberMe);
-      setPendingMfaUser(user);
+      setAutoEnterApp(rememberMe);
+      onAuthenticated(user);
     } catch (error) {
       registerFailedAttempt();
       setAuthError(getLoginErrorMessage(error, mode));
@@ -195,8 +191,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
     try {
       const user = provider === "google" ? await loginWithGoogle(rememberMe) : await loginWithApple(rememberMe);
       resetFailedAttempts();
-      setPendingAutoEnterApp(rememberMe);
-      setPendingMfaUser(user);
+      setAutoEnterApp(rememberMe);
+      onAuthenticated(user);
     } catch {
       registerFailedAttempt();
       setAuthError(provider === "apple" ? "Apple Login chưa sẵn sàng hoặc chưa bật trong Firebase Console." : "Đăng nhập Google thất bại.");
@@ -224,25 +220,6 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
       setAuthError("Chưa gửi được email khôi phục. Hãy thử lại sau.");
     } finally {
       setIsSubmitting(false);
-    }
-  }
-
-  function handleOtpConfirm() {
-    const checkedOtp = validateOtp(otp);
-
-    if (!checkedOtp.ok) {
-      setAuthError(checkedOtp.errors[0] ?? "Mã OTP chưa hợp lệ.");
-      return;
-    }
-
-    if (pendingMfaUser) {
-      // Security: this is the UI handoff point for real Firebase MFA/backend OTP verification in production.
-      setAutoEnterApp(pendingAutoEnterApp);
-      onAuthenticated(pendingMfaUser);
-      setPendingMfaUser(null);
-      setPendingAutoEnterApp(false);
-      setOtp("");
-      setAuthError(null);
     }
   }
 
@@ -449,22 +426,6 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           </p>
         </form>
       </section>
-
-      {pendingMfaUser && (
-        <div className="otp-overlay" role="dialog" aria-modal="true" aria-labelledby="otp-title">
-          <section className="otp-card">
-            <div className="otp-icon" aria-hidden="true">
-              <KeyRound size={22} />
-            </div>
-            <h2 id="otp-title">Xác thực 2 bước</h2>
-            <p>Nhập mã OTP 6 số. Màn hình này đã sẵn sàng để nối Firebase MFA hoặc OTP backend.</p>
-            <input inputMode="numeric" maxLength={6} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" />
-            <button type="button" onClick={handleOtpConfirm}>
-              Xác nhận
-            </button>
-          </section>
-        </div>
-      )}
 
       <nav className="auth-footer-links" aria-label="Liên kết bảo mật">
         <button type="button">Bảo mật</button>

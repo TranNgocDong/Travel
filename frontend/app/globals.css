@@ -1311,7 +1311,8 @@ button {
   gap: 10px;
 }
 
-.osm-map-shell {
+.osm-map-shell,
+.google-map-shell {
   position: relative;
   height: clamp(360px, 52vh, 560px);
   min-height: 260px;
@@ -1321,9 +1322,88 @@ button {
   background: var(--panel);
 }
 
-.osm-map-canvas {
+.osm-map-canvas,
+.google-map-canvas {
   position: absolute;
   inset: 0;
+}
+
+.google-place-search {
+  position: absolute;
+  z-index: 420;
+  top: 12px;
+  right: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 520px;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+  color: var(--accent-strong);
+  padding: 8px 12px;
+}
+
+.google-place-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  outline: 0;
+}
+
+.google-place-search input::placeholder {
+  color: var(--muted);
+}
+
+.google-place-card {
+  position: absolute;
+  z-index: 420;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: grid;
+  gap: 5px;
+  max-width: 420px;
+  border: 1px solid rgba(15, 118, 110, 0.26);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
+  padding: 12px;
+}
+
+.google-place-card strong,
+.google-place-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.google-place-card strong {
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+.google-place-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.google-place-card button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 900;
 }
 
 .osm-map-status {
@@ -1413,6 +1493,29 @@ button {
 
 .leaflet-control-attribution {
   font-size: 0.68rem;
+}
+
+.vietnam-sea-label {
+  pointer-events: none;
+}
+
+.vietnam-sea-label span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 168px;
+  min-height: 34px;
+  border: 1px solid rgba(15, 118, 110, 0.35);
+  border-radius: 999px;
+  background: rgba(248, 253, 250, 0.9);
+  box-shadow: 0 8px 22px rgba(2, 44, 34, 0.16);
+  color: #064e3b;
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
 }
 
 .route-marker {
@@ -3030,75 +3133,6 @@ button {
 
 .auth-submit {
   min-height: 44px;
-}
-
-.otp-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1600;
-  display: grid;
-  place-items: center;
-  background: rgba(3, 7, 18, 0.58);
-  padding: 18px;
-}
-
-.otp-card {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
-  width: min(100%, 360px);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
-  padding: 20px;
-  text-align: center;
-}
-
-.otp-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-.otp-card h2,
-.otp-card p {
-  margin: 0;
-}
-
-.otp-card p {
-  color: var(--muted);
-  font-size: 0.88rem;
-  line-height: 1.45;
-}
-
-.otp-card input {
-  width: 100%;
-  min-height: 48px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-soft);
-  color: var(--text);
-  font-size: 1.35rem;
-  font-weight: 900;
-  letter-spacing: 0;
-  outline: none;
-  text-align: center;
-}
-
-.otp-card button {
-  width: 100%;
-  min-height: 42px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #ffffff;
-  font-weight: 900;
 }
 
 .auth-shell {

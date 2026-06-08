@@ -159,6 +159,15 @@ type SavedPlace = {
 
 const savedPlacesStorageKey = "trailledger:saved-places:v1";
 const maxSavedPlaces = 18;
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
+const googleMapsScriptId = "trailledger-google-maps-js";
+let googleMapsLoaderPromise: Promise<typeof google> | null = null;
+const vietnamSeaLabels = [
+  { label: "Quần đảo Hoàng Sa", lat: 16.55, lng: 112.35 },
+  { label: "Quần đảo Trường Sa", lat: 10.2, lng: 114.2 },
+] as const;
+
+type GoogleWindow = Window & { google?: typeof google };
 
 function mapMarkerIconPath(kind: ApiMapMarkerKind): string {
   return trailIconPath(kind);
@@ -301,6 +310,56 @@ function placeSourceLabel(source: SavedPlaceSource): string {
   }
 
   return "Gần tuyến";
+}
+
+function loadGoogleMaps(): Promise<typeof google> {
+  if (!googleMapsApiKey || typeof window === "undefined") {
+    return Promise.reject(new Error("Google Maps API key is missing."));
+  }
+
+  const googleWindow = window as GoogleWindow;
+
+  if (googleWindow.google?.maps?.Map && googleWindow.google.maps.places?.SearchBox) {
+    return Promise.resolve(googleWindow.google);
+  }
+
+  if (googleMapsLoaderPromise) {
+    return googleMapsLoaderPromise;
+  }
+
+  googleMapsLoaderPromise = new Promise((resolve, reject) => {
+    const existingScript = document.getElementById(googleMapsScriptId) as HTMLScriptElement | null;
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => {
+        const loadedGoogle = (window as GoogleWindow).google;
+        loadedGoogle ? resolve(loadedGoogle) : reject(new Error("Google Maps did not initialize."));
+      });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load Google Maps.")));
+      return;
+    }
+
+    const script = document.createElement("script");
+    const params = new URLSearchParams({
+      key: googleMapsApiKey,
+      libraries: "places",
+      language: "vi",
+      region: "VN",
+    });
+
+    script.id = googleMapsScriptId;
+    script.async = true;
+    script.defer = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+    script.onload = () => {
+      const loadedGoogle = (window as GoogleWindow).google;
+      loadedGoogle ? resolve(loadedGoogle) : reject(new Error("Google Maps did not initialize."));
+    };
+    script.onerror = () => reject(new Error("Could not load Google Maps."));
+    document.head.appendChild(script);
+  });
+
+  return googleMapsLoaderPromise;
 }
 
 function TrailMapIcon({ kind, className = "trail-map-icon" }: { kind: TrailIconKind; className?: string }) {
@@ -3126,7 +3185,7 @@ function RouteIntelligence({
             {isMapFullscreen ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
             <span>{isMapFullscreen ? "Thu nhỏ" : "Toàn màn hình"}</span>
           </button>
-          <OpenStreetRouteMap
+          <RouteMap
             currentUserId={currentUserId}
             focusedLocationRequest={focusedLocationRequest}
             isFullscreen={isMapFullscreen}
@@ -3134,6 +3193,7 @@ function RouteIntelligence({
             mapMarkers={mapMarkers}
             memberRoutes={visibleMemberRoutes}
             memberLocations={memberLocations}
+            onDestinationPlaceSelect={onDestinationPlaceSelect}
             onMapMarkerPointSelected={onMapMarkerPointSelected}
             onPlanRouteToMember={onPlanRouteToMember}
             pois={pois}
@@ -3425,6 +3485,340 @@ function RouteIntelligence({
   );
 }
 
+type RouteMapProps = {
+  currentUserId: string;
+  focusedLocationRequest: FocusedLocationRequest | null;
+  isFullscreen: boolean;
+  isPlacingMapMarker: boolean;
+  mapMarkers: ApiMapMarker[];
+  memberRoutes: ApiMemberRoute[];
+  memberLocations: ApiMemberLocation[];
+  onDestinationPlaceSelect: (place: SavedPlace) => void;
+  onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
+  onPlanRouteToMember: (location: ApiMemberLocation) => void;
+  pois: ApiTripPoi[];
+  routePlan: ApiRoutePlan;
+};
+
+function RouteMap(props: RouteMapProps) {
+  if (googleMapsApiKey) {
+    return <GoogleRouteMap {...props} />;
+  }
+
+  return <OpenStreetRouteMap {...props} />;
+}
+
+function GoogleRouteMap({
+  currentUserId,
+  focusedLocationRequest,
+  isFullscreen,
+  isPlacingMapMarker,
+  mapMarkers,
+  memberRoutes,
+  memberLocations,
+  onDestinationPlaceSelect,
+  onMapMarkerPointSelected,
+  onPlanRouteToMember,
+  pois,
+  routePlan,
+}: RouteMapProps) {
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const overlaysRef = useRef<Array<google.maps.MVCObject>>([]);
+  const searchMarkerRef = useRef<google.maps.Marker | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [selectedPlace, setSelectedPlace] = useState<SavedPlace | null>(null);
+
+  const clearGoogleOverlays = useCallback(() => {
+    for (const overlay of overlaysRef.current) {
+      if ("setMap" in overlay && typeof overlay.setMap === "function") {
+        overlay.setMap(null);
+      }
+    }
+
+    overlaysRef.current = [];
+    searchMarkerRef.current?.setMap(null);
+    searchMarkerRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (!map) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      google.maps.event.trigger(map, "resize");
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const points = routePlan.geometry.length ? routePlan.geometry : routePlan.waypoints.map((waypoint) => waypoint.coordinate);
+
+    if (!points.length || !mapElementRef.current) {
+      setStatus("error");
+      return;
+    }
+
+    setStatus("loading");
+
+    void loadGoogleMaps()
+      .then((googleMaps) => {
+        if (cancelled || !mapElementRef.current) {
+          return;
+        }
+
+        clearGoogleOverlays();
+        const routePath = points.map((point) => ({ lat: point.lat, lng: point.lng }));
+        const map = new googleMaps.maps.Map(mapElementRef.current, {
+          center: routePath[0],
+          clickableIcons: true,
+          fullscreenControl: false,
+          gestureHandling: "greedy",
+          mapTypeControl: false,
+          streetViewControl: false,
+          zoom: 12,
+        });
+
+        mapInstanceRef.current = map;
+
+        const bounds = new googleMaps.maps.LatLngBounds();
+        routePath.forEach((point) => bounds.extend(point));
+
+        const routeLine = new googleMaps.maps.Polyline({
+          geodesic: true,
+          map,
+          path: routePath,
+          strokeColor: "#0f766e",
+          strokeOpacity: 0.92,
+          strokeWeight: 5,
+        });
+        overlaysRef.current.push(routeLine);
+
+        routePlan.waypoints.forEach((waypoint, index) => {
+          const marker = new googleMaps.maps.Marker({
+            label: {
+              color: "#ffffff",
+              fontWeight: "900",
+              text: String(index + 1),
+            },
+            map,
+            position: waypoint.coordinate,
+            title: waypoint.name,
+          });
+          marker.addListener("click", () => {
+            new googleMaps.maps.InfoWindow({
+              content: `<strong>${escapeHtml(waypoint.name)}</strong><br />${escapeHtml(waypoint.eta)} - ${escapeHtml(String(waypoint.distanceFromStartKm))} km`,
+            }).open({ anchor: marker, map });
+          });
+          overlaysRef.current.push(marker);
+        });
+
+        for (const poi of pois) {
+          const marker = new googleMaps.maps.Marker({
+            icon: {
+              path: googleMaps.maps.SymbolPath.CIRCLE,
+              fillColor: poi.kind === "fuel" ? "#f59e0b" : poi.kind === "lodging" ? "#7c3aed" : "#16a34a",
+              fillOpacity: 0.95,
+              scale: 7,
+              strokeColor: "#ffffff",
+              strokeWeight: 2,
+            },
+            map,
+            position: { lat: poi.latitude, lng: poi.longitude },
+            title: poi.name,
+          });
+          marker.addListener("click", () => {
+            new googleMaps.maps.InfoWindow({
+              content: `<strong>${escapeHtml(poi.name)}</strong><br />${escapeHtml(poiKindLabel(poi.kind))} - cách tuyến ${escapeHtml(String(poi.distanceFromRouteKm))} km`,
+            }).open({ anchor: marker, map });
+          });
+          overlaysRef.current.push(marker);
+        }
+
+        for (const markerItem of mapMarkers) {
+          const marker = new googleMaps.maps.Marker({
+            map,
+            position: { lat: markerItem.latitude, lng: markerItem.longitude },
+            title: markerItem.label,
+          });
+          marker.addListener("click", () => {
+            new googleMaps.maps.InfoWindow({
+              content: `<strong>${escapeHtml(markerItem.label)}</strong><br />${escapeHtml(mapMarkerKindLabel(markerItem.kind))}`,
+            }).open({ anchor: marker, map });
+          });
+          overlaysRef.current.push(marker);
+        }
+
+        for (const location of memberLocations) {
+          const label = location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên";
+          const marker = new googleMaps.maps.Marker({
+            label: {
+              color: "#ffffff",
+              fontWeight: "900",
+              text: createLocationInitials(label),
+            },
+            map,
+            position: { lat: location.latitude, lng: location.longitude },
+            title: label,
+          });
+
+          if (location.userId !== currentUserId) {
+            marker.addListener("click", () => onPlanRouteToMember(location));
+          }
+
+          overlaysRef.current.push(marker);
+
+          if (location.userId === focusedLocationRequest?.userId) {
+            map.setCenter({ lat: location.latitude, lng: location.longitude });
+            map.setZoom(Math.max(map.getZoom() ?? 15, 15));
+          }
+        }
+
+        for (const memberRoute of memberRoutes) {
+          const memberPoints = memberRoute.routePlan.geometry.length ? memberRoute.routePlan.geometry : memberRoute.routePlan.waypoints.map((waypoint) => waypoint.coordinate);
+
+          if (memberPoints.length < 2) {
+            continue;
+          }
+
+          const memberLine = new googleMaps.maps.Polyline({
+            geodesic: true,
+            map,
+            path: memberPoints,
+            strokeColor: memberRouteColor(memberRoute.userId),
+            strokeOpacity: 0.86,
+            strokeWeight: 4,
+          });
+          overlaysRef.current.push(memberLine);
+        }
+
+        map.fitBounds(bounds, 28);
+
+        if (searchInputRef.current) {
+          const searchBox = new googleMaps.maps.places.SearchBox(searchInputRef.current);
+          searchBox.bindTo("bounds", map);
+          searchBox.addListener("places_changed", () => {
+            const places = searchBox.getPlaces() ?? [];
+            const firstPlace = places[0];
+
+            if (!firstPlace?.geometry?.location) {
+              return;
+            }
+
+            const coordinate = {
+              lat: firstPlace.geometry.location.lat(),
+              lng: firstPlace.geometry.location.lng(),
+            };
+            const place: SavedPlace = {
+              id: savedPlaceKey(firstPlace.name ?? firstPlace.formatted_address ?? "Google place", coordinate),
+              label: firstPlace.name ?? firstPlace.formatted_address ?? "Google place",
+              subtitle: firstPlace.formatted_address ?? "Google Places",
+              source: "recent",
+              coordinate,
+              lastUsedAt: new Date().toISOString(),
+              useCount: 1,
+            };
+
+            searchMarkerRef.current?.setMap(null);
+            searchMarkerRef.current = new googleMaps.maps.Marker({
+              animation: googleMaps.maps.Animation.DROP,
+              map,
+              position: coordinate,
+              title: place.label,
+            });
+            map.setCenter(coordinate);
+            map.setZoom(Math.max(map.getZoom() ?? 15, 16));
+            setSelectedPlace(place);
+            onDestinationPlaceSelect(place);
+          });
+        }
+
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStatus("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      clearGoogleOverlays();
+    };
+  }, [clearGoogleOverlays, currentUserId, focusedLocationRequest?.userId, mapMarkers, memberLocations, memberRoutes, onDestinationPlaceSelect, onPlanRouteToMember, pois, routePlan]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+
+    if (!map || !isPlacingMapMarker) {
+      return undefined;
+    }
+
+    const listener = google.maps.event.addListener(map, "click", (event: google.maps.MapMouseEvent) => {
+      if (!event.latLng) {
+        return;
+      }
+
+      onMapMarkerPointSelected({
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng(),
+      });
+    });
+
+    return () => listener.remove();
+  }, [isPlacingMapMarker, onMapMarkerPointSelected]);
+
+  if (status === "error") {
+    return (
+      <OpenStreetRouteMap
+        currentUserId={currentUserId}
+        focusedLocationRequest={focusedLocationRequest}
+        isFullscreen={isFullscreen}
+        isPlacingMapMarker={isPlacingMapMarker}
+        mapMarkers={mapMarkers}
+        memberRoutes={memberRoutes}
+        memberLocations={memberLocations}
+        onDestinationPlaceSelect={onDestinationPlaceSelect}
+        onMapMarkerPointSelected={onMapMarkerPointSelected}
+        onPlanRouteToMember={onPlanRouteToMember}
+        pois={pois}
+        routePlan={routePlan}
+      />
+    );
+  }
+
+  return (
+    <div className={isPlacingMapMarker ? "google-map-shell placing" : "google-map-shell"}>
+      <div className="google-place-search">
+        <MapPin size={16} />
+        <input ref={searchInputRef} placeholder="Tìm bằng Google: quán, bãi xe, nhà nghỉ..." />
+      </div>
+      <div className="google-map-canvas" ref={mapElementRef} />
+      {selectedPlace && (
+        <div className="google-place-card">
+          <strong>{selectedPlace.label}</strong>
+          <span>{selectedPlace.subtitle}</span>
+          <button type="button" onClick={() => onDestinationPlaceSelect(selectedPlace)}>
+            Dùng làm điểm đến
+          </button>
+        </div>
+      )}
+      {status !== "ready" && (
+        <div className="osm-map-status">
+          <MapPin size={18} />
+          <span>Đang tải Google Maps...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OpenStreetRouteMap({
   currentUserId,
   focusedLocationRequest,
@@ -3433,23 +3827,13 @@ function OpenStreetRouteMap({
   mapMarkers,
   memberRoutes,
   memberLocations,
+  onDestinationPlaceSelect,
   onMapMarkerPointSelected,
   onPlanRouteToMember,
   pois,
   routePlan,
-}: {
-  currentUserId: string;
-  focusedLocationRequest: FocusedLocationRequest | null;
-  isFullscreen: boolean;
-  isPlacingMapMarker: boolean;
-  mapMarkers: ApiMapMarker[];
-  memberRoutes: ApiMemberRoute[];
-  memberLocations: ApiMemberLocation[];
-  onMapMarkerPointSelected: (point: ApiGeoPoint) => void;
-  onPlanRouteToMember: (location: ApiMemberLocation) => void;
-  pois: ApiTripPoi[];
-  routePlan: ApiRoutePlan;
-}) {
+}: RouteMapProps) {
+  void onDestinationPlaceSelect;
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<import("leaflet").Map | null>(null);
   const leafletModuleRef = useRef<typeof import("leaflet") | null>(null);
@@ -3460,6 +3844,7 @@ function OpenStreetRouteMap({
   const mapMarkerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const memberRouteLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const poiLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
+  const vietnamSeaLabelLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const [status, setStatus] = useState<LeafletMapStatus>("loading");
   const [isFollowingUser, setIsFollowingUser] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationWatchStatus>("idle");
@@ -3503,6 +3888,11 @@ function OpenStreetRouteMap({
   const clearPoiLayer = useCallback(() => {
     poiLayerRef.current?.remove();
     poiLayerRef.current = null;
+  }, []);
+
+  const clearVietnamSeaLabelLayer = useCallback(() => {
+    vietnamSeaLabelLayerRef.current?.remove();
+    vietnamSeaLabelLayerRef.current = null;
   }, []);
 
   const updateUserPosition = useCallback(async (position: GeolocationPosition) => {
@@ -3913,6 +4303,7 @@ function OpenStreetRouteMap({
         clearMapMarkerLayer();
         clearMemberRouteLayer();
         clearPoiLayer();
+        clearVietnamSeaLabelLayer();
         leafletModuleRef.current = leaflet;
 
         const latLngs = points.map((point) => leaflet.latLng(point.lat, point.lng));
@@ -3930,6 +4321,27 @@ function OpenStreetRouteMap({
             maxZoom: 19,
           })
           .addTo(map);
+
+        const vietnamSeaLabelLayer = leaflet.layerGroup();
+
+        for (const seaLabel of vietnamSeaLabels) {
+          leaflet
+            .marker(leaflet.latLng(seaLabel.lat, seaLabel.lng), {
+              icon: leaflet.divIcon({
+                className: "vietnam-sea-label",
+                html: `<span>${escapeHtml(seaLabel.label)}</span>`,
+                iconAnchor: [84, 17],
+                iconSize: [168, 34],
+              }),
+              interactive: false,
+              keyboard: false,
+              title: seaLabel.label,
+            })
+            .addTo(vietnamSeaLabelLayer);
+        }
+
+        vietnamSeaLabelLayer.addTo(map);
+        vietnamSeaLabelLayerRef.current = vietnamSeaLabelLayer;
 
         leaflet
           .polyline(latLngs, {
@@ -3978,8 +4390,9 @@ function OpenStreetRouteMap({
       clearMapMarkerLayer();
       clearMemberRouteLayer();
       clearPoiLayer();
+      clearVietnamSeaLabelLayer();
     };
-  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearMemberRouteLayer, clearPoiLayer, clearUserLocationLayer, routePlan]);
+  }, [clearMapMarkerLayer, clearMemberLocationLayer, clearMemberRouteLayer, clearPoiLayer, clearUserLocationLayer, clearVietnamSeaLabelLayer, routePlan]);
 
   useEffect(() => {
     return () => {

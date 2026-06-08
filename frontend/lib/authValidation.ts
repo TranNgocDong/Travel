@@ -102,19 +102,3 @@ export function validateDisplayName(value: string): AuthValidationResult<string>
 
   return errors.length ? { ok: false, errors } : { ok: true, value: displayName };
 }
-
-export function validateOtp(value: string): AuthValidationResult<string> {
-  const otp = sanitizeAuthText(value, 6);
-
-  if (!/^\d{6}$/.test(otp)) {
-    return {
-      ok: false,
-      errors: ["Mã OTP phải gồm đúng 6 số."],
-    };
-  }
-
-  return {
-    ok: true,
-    value: otp,
-  };
-}
