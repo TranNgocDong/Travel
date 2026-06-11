@@ -378,7 +378,7 @@ function memberRouteColor(seed: string): string {
 }
 
 export function ExpensePlanner() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [activeTab, setActiveTab] = useState<MobileTab>("route");
   const [isAppRailOpen, setIsAppRailOpen] = useState(false);
   const [isAppRailMinimized, setIsAppRailMinimized] = useState(false);
@@ -720,7 +720,7 @@ export function ExpensePlanner() {
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("trail-ledger-theme");
-    const nextTheme = savedTheme === "dark" ? "dark" : "light";
+    const nextTheme = savedTheme === "light" ? "light" : "dark";
     setTheme(nextTheme);
     document.documentElement.dataset.theme = nextTheme;
     setSavedPlaces(readSavedPlaces());
@@ -3063,6 +3063,48 @@ function RouteIntelligence({
 }) {
   const [isMapFullscreen, setIsMapFullscreen] = useState(false);
   const [isRideMode, setIsRideMode] = useState(false);
+  const [sheetState, setSheetState] = useState<"collapsed" | "half" | "expanded">("collapsed");
+  const touchStartY = useRef<number>(0);
+  const didSheetSwipe = useRef(false);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartY.current = e.touches[0]?.clientY ?? 0;
+    didSheetSwipe.current = false;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touchEndY = e.changedTouches[0]?.clientY ?? 0;
+    const diffY = touchEndY - touchStartY.current;
+
+    if (Math.abs(diffY) > 40) {
+      didSheetSwipe.current = true;
+
+      if (diffY < 0) {
+        setSheetState((prev) => {
+          if (prev === "collapsed") return "half";
+          return "expanded";
+        });
+      } else {
+        setSheetState((prev) => {
+          if (prev === "expanded") return "half";
+          return "collapsed";
+        });
+      }
+    }
+  };
+
+  const handleHandleClick = () => {
+    if (didSheetSwipe.current) {
+      didSheetSwipe.current = false;
+      return;
+    }
+
+    setSheetState((prev) => {
+      if (prev === "collapsed") return "half";
+      if (prev === "half") return "expanded";
+      return "collapsed";
+    });
+  };
   const visibleMemberRoutes = useMemo(
     () => memberRoutes.filter((route) => visibleMemberRouteSet.has(route.id)),
     [memberRoutes, visibleMemberRouteSet],
@@ -3123,47 +3165,6 @@ function RouteIntelligence({
         </div>
         <Map size={22} />
       </div>
-
-      <form className="route-builder" onSubmit={onPlanRoute}>
-        <label className="place-field">
-          <span>Điểm đi</span>
-          <input value={origin} onChange={(event) => onOriginChange(event.target.value)} placeholder="Điểm xuất phát" />
-          <PlaceSuggestionList suggestions={originSuggestions} onSelect={onOriginPlaceSelect} />
-        </label>
-        <label className="place-field">
-          <span>Điểm đến</span>
-          <input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder="Điểm đến" />
-          <PlaceSuggestionList suggestions={destinationSuggestions} onSelect={onDestinationPlaceSelect} />
-        </label>
-        {originCoordinate && <p className="route-gps-note">Đang dùng GPS làm điểm xuất phát.</p>}
-        {recentPlaceShortcuts.length > 0 && (
-          <div className="route-place-shortcuts" aria-label="Địa điểm đã dùng gần đây">
-            <span>Gần đây</span>
-            {recentPlaceShortcuts.map((place) => (
-              <button key={place.id} type="button" onClick={() => onDestinationPlaceSelect(place)}>
-                <MapPin size={14} />
-                {place.label}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="route-builder-actions">
-          <button className="location-route-button" type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={onPlanRouteFromCurrentLocation}>
-            <MapPin size={17} />
-            <span>{isUsingCurrentLocation ? "Đang lấy GPS..." : "Từ vị trí của tôi"}</span>
-          </button>
-          <button type="submit" disabled={isPlanningRoute || isUsingCurrentLocation}>
-            <Navigation size={17} />
-            <span>{isPlanningRoute ? "Đang vẽ..." : "Vẽ tuyến"}</span>
-          </button>
-          {canCreateMemberRoute && (
-            <button className="member-route-save-button" type="button" disabled={isSavingMemberRoute || isPlanningRoute || isUsingCurrentLocation} onClick={onSaveOwnerRoute}>
-              <Users size={17} />
-              <span>{isSavingMemberRoute ? "Đang lưu..." : "Lưu tuyến riêng"}</span>
-            </button>
-          )}
-        </div>
-      </form>
 
       <div className="route-intel-grid">
         <div className={isMapFullscreen ? "route-map-panel map-fullscreen" : "route-map-panel"} data-ride-mode={isRideMode ? "on" : "off"}>
@@ -3266,220 +3267,280 @@ function RouteIntelligence({
           )}
         </div>
 
-        <div className="route-side-stack">
-          <div className="next-stop-card">
-            <span className="eyebrow">Cần chú ý tiếp theo</span>
-            <strong>{routePlan.summary.nextCriticalStop ?? "Không có cảnh báo"}</strong>
-            <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chặng hiện tại ổn định."}</p>
+        <div className="route-bottom-sheet" data-state={sheetState}>
+          <div
+            className="bottom-sheet-handle-container"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onClick={handleHandleClick}
+          >
+            <div className="bottom-sheet-handle" />
+            <div className="bottom-sheet-title">
+              <span>{routePlan.destination}</span>
+              <small>
+                {routePlan.totalDistanceKm} km chặng · {routePlan.summary.weatherAlerts} cảnh báo
+              </small>
+            </div>
           </div>
 
-          <div className="poi-card">
-            <div className="poi-card-head">
-              <div>
-                <span className="eyebrow">Tiện ích trên đường</span>
-                <strong>{isLoadingPois ? "Đang tìm..." : `${pois.length} địa điểm gần tuyến`}</strong>
-              </div>
-              <MapPin size={18} />
-            </div>
-
-            <div className="poi-filter-grid" aria-label="Lọc địa điểm trên map">
-              {poiFilters.map((item) => {
-                return (
-                  <button
-                    key={item.id}
-                    className={poiKinds.includes(item.id) ? "active" : ""}
-                    type="button"
-                    onClick={() => onTogglePoiKind(item.id)}
-                  >
-                    <TrailMapIcon kind={item.id} />
-                    <span>{item.label}</span>
+          <div className="bottom-sheet-content">
+            <form className="route-builder" onSubmit={onPlanRoute}>
+              <label className="place-field">
+                <span>Điểm đi</span>
+                <input value={origin} onChange={(event) => onOriginChange(event.target.value)} placeholder="Điểm xuất phát" />
+                <PlaceSuggestionList suggestions={originSuggestions} onSelect={onOriginPlaceSelect} />
+              </label>
+              <label className="place-field">
+                <span>Điểm đến</span>
+                <input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder="Điểm đến" />
+                <PlaceSuggestionList suggestions={destinationSuggestions} onSelect={onDestinationPlaceSelect} />
+              </label>
+              {originCoordinate && <p className="route-gps-note">Đang dùng GPS làm điểm xuất phát.</p>}
+              {recentPlaceShortcuts.length > 0 && (
+                <div className="route-place-shortcuts" aria-label="Địa điểm đã dùng gần đây">
+                  <span>Gần đây</span>
+                  {recentPlaceShortcuts.map((place) => (
+                    <button key={place.id} type="button" onClick={() => onDestinationPlaceSelect(place)}>
+                      <MapPin size={14} />
+                      {place.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="route-builder-actions">
+                <button className="location-route-button" type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={onPlanRouteFromCurrentLocation}>
+                  <MapPin size={17} />
+                  <span>{isUsingCurrentLocation ? "Đang lấy GPS..." : "Từ vị trí của tôi"}</span>
+                </button>
+                <button type="submit" disabled={isPlanningRoute || isUsingCurrentLocation}>
+                  <Navigation size={17} />
+                  <span>{isPlanningRoute ? "Đang vẽ..." : "Vẽ tuyến"}</span>
+                </button>
+                {canCreateMemberRoute && (
+                  <button className="member-route-save-button" type="button" disabled={isSavingMemberRoute || isPlanningRoute || isUsingCurrentLocation} onClick={onSaveOwnerRoute}>
+                    <Users size={17} />
+                    <span>{isSavingMemberRoute ? "Đang lưu..." : "Lưu tuyến riêng"}</span>
                   </button>
-                );
-              })}
-            </div>
+                )}
+              </div>
+            </form>
 
-            <div className="poi-list">
-              {pois.length ? (
-                pois.slice(0, 7).map((poi) => (
-                  <div className="poi-row" key={poi.id}>
-                    <span className={`poi-dot ${poi.kind}`}>
-                      <TrailMapIcon kind={poi.kind} />
-                    </span>
-                    <div>
-                      <strong>{poi.name}</strong>
-                      <small>
-                        {poiKindLabel(poi.kind)} · cách tuyến {poi.distanceFromRouteKm} km
-                      </small>
-                    </div>
-                    <button type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={() => onPlanRouteToPoi(poi)}>
-                      Tới
-                    </button>
-                    <button type="button" disabled={isSavingMapMarker} onClick={() => onSavePoiAsMarker(poi)}>
-                      Lưu
-                    </button>
+            <div className="route-side-stack">
+              <div className="next-stop-card">
+                <span className="eyebrow">Cần chú ý tiếp theo</span>
+                <strong>{routePlan.summary.nextCriticalStop ?? "Không có cảnh báo"}</strong>
+                <p>{routePlan.waypoints.find((waypoint) => waypoint.name === routePlan.summary.nextCriticalStop)?.weather.advisory ?? "Chặng hiện tại ổn định."}</p>
+              </div>
+
+              <div className="poi-card">
+                <div className="poi-card-head">
+                  <div>
+                    <span className="eyebrow">Tiện ích trên đường</span>
+                    <strong>{isLoadingPois ? "Đang tìm..." : `${pois.length} địa điểm gần tuyến`}</strong>
                   </div>
-                ))
-              ) : (
-                <p>{isLoadingPois ? "Đang lấy địa điểm từ OpenStreetMap." : "Chưa có quán ăn, chỗ nghỉ hoặc cây xăng gần tuyến này."}</p>
-              )}
-            </div>
-          </div>
+                  <MapPin size={18} />
+                </div>
 
-          <div className="group-location-card">
-            <div className="group-location-head">
-              <div>
-                <span className="eyebrow">GPS nhóm</span>
-                <strong>{memberLocations.length} đang chia sẻ</strong>
-              </div>
-              <button
-                className={isSharingLocation ? "location-share-button active" : "location-share-button"}
-                type="button"
-                onClick={isSharingLocation ? onStopSharingLocation : onStartSharingLocation}
-              >
-                <Navigation size={16} />
-                <span>{isSharingLocation ? "Tắt" : "Bật"}</span>
-              </button>
-            </div>
-
-            {locationShareStatus !== "idle" && <p className={`location-share-note ${locationShareStatus}`}>{locationShareStatusText(locationShareStatus)}</p>}
-
-            <div className="group-location-list">
-              {memberLocations.length ? (
-                memberLocations.map((location) => (
-                  <button
-                    className={location.userId === currentUserId ? "group-location-row self" : "group-location-row"}
-                    type="button"
-                    key={location.userId}
-                    disabled={location.userId === currentUserId || isPlanningRoute || isUsingCurrentLocation}
-                    onClick={() => onPlanRouteToMember(location)}
-                  >
-                    <span>{createLocationInitials(location.displayName || location.userId)}</span>
-                    <div>
-                      <strong>{location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên"}</strong>
-                      <small>{formatLocationTime(location.sharedAt)}</small>
-                    </div>
-                    {location.userId !== currentUserId && <em>Đi gặp</em>}
-                  </button>
-                ))
-              ) : (
-                <p>Chưa ai bật chia sẻ GPS.</p>
-              )}
-            </div>
-          </div>
-
-          <div className="member-route-card">
-            <div className="member-route-head">
-              <div>
-                <span className="eyebrow">Tuyến thành viên</span>
-                <strong>{memberRoutes.length} tuyến riêng</strong>
-              </div>
-              <Users size={18} />
-            </div>
-
-            <div className="member-route-list">
-              {memberRoutes.length ? (
-                memberRoutes.map((route) => {
-                  const isRouteVisible = visibleMemberRouteSet.has(route.id);
-
-                  return (
-                    <div className={isRouteVisible ? "member-route-row" : "member-route-row hidden"} key={route.id}>
-                      <span style={{ background: memberRouteColor(route.userId) }} />
-                      <div>
-                        <strong>{route.displayName}</strong>
-                        <small>
-                          {route.routePlan.totalDistanceKm} km · {formatDuration(route.routePlan.durationMinutes)}
-                        </small>
-                      </div>
+                <div className="poi-filter-grid" aria-label="Lọc địa điểm trên map">
+                  {poiFilters.map((item) => {
+                    return (
                       <button
-                        className={isRouteVisible ? "member-route-visible-button active" : "member-route-visible-button"}
+                        key={item.id}
+                        className={poiKinds.includes(item.id) ? "active" : ""}
                         type="button"
-                        onClick={() => onToggleMemberRoute(route.id)}
+                        onClick={() => onTogglePoiKind(item.id)}
                       >
-                        {isRouteVisible ? "Ẩn" : "Hiện"}
+                        <TrailMapIcon kind={item.id} />
+                        <span>{item.label}</span>
                       </button>
-                      {(route.userId === currentUserId || canManageMemberRoutes) && (
-                        <button className="member-route-delete-button" type="button" disabled={deletingMemberRouteId === route.id} onClick={() => onDeleteMemberRoute(route)}>
+                    );
+                  })}
+                </div>
+
+                <div className="poi-list">
+                  {pois.length ? (
+                    pois.slice(0, 7).map((poi) => (
+                      <div className="poi-row" key={poi.id}>
+                        <span className={`poi-dot ${poi.kind}`}>
+                          <TrailMapIcon kind={poi.kind} />
+                        </span>
+                        <div>
+                          <strong>{poi.name}</strong>
+                          <small>
+                            {poiKindLabel(poi.kind)} · cách tuyến {poi.distanceFromRouteKm} km
+                          </small>
+                        </div>
+                        <button type="button" disabled={isPlanningRoute || isUsingCurrentLocation} onClick={() => onPlanRouteToPoi(poi)}>
+                          Tới
+                        </button>
+                        <button type="button" disabled={isSavingMapMarker} onClick={() => onSavePoiAsMarker(poi)}>
+                          Lưu
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p>{isLoadingPois ? "Đang lấy địa điểm từ OpenStreetMap." : "Chưa có quán ăn, chỗ nghỉ hoặc cây xăng gần tuyến này."}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="group-location-card">
+                <div className="group-location-head">
+                  <div>
+                    <span className="eyebrow">GPS nhóm</span>
+                    <strong>{memberLocations.length} đang chia sẻ</strong>
+                  </div>
+                  <button
+                    className={isSharingLocation ? "location-share-button active" : "location-share-button"}
+                    type="button"
+                    onClick={isSharingLocation ? onStopSharingLocation : onStartSharingLocation}
+                  >
+                    <Navigation size={16} />
+                    <span>{isSharingLocation ? "Tắt" : "Bật"}</span>
+                  </button>
+                </div>
+
+                {locationShareStatus !== "idle" && <p className={`location-share-note ${locationShareStatus}`}>{locationShareStatusText(locationShareStatus)}</p>}
+
+                <div className="group-location-list">
+                  {memberLocations.length ? (
+                    memberLocations.map((location) => (
+                      <button
+                        className={location.userId === currentUserId ? "group-location-row self" : "group-location-row"}
+                        type="button"
+                        key={location.userId}
+                        disabled={location.userId === currentUserId || isPlanningRoute || isUsingCurrentLocation}
+                        onClick={() => onPlanRouteToMember(location)}
+                      >
+                        <span>{createLocationInitials(location.displayName || location.userId)}</span>
+                        <div>
+                          <strong>{location.userId === currentUserId ? "Bạn" : location.displayName || "Thành viên"}</strong>
+                          <small>{formatLocationTime(location.sharedAt)}</small>
+                        </div>
+                        {location.userId !== currentUserId && <em>Đi gặp</em>}
+                      </button>
+                    ))
+                  ) : (
+                    <p>Chưa ai bật chia sẻ GPS.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="member-route-card">
+                <div className="member-route-head">
+                  <div>
+                    <span className="eyebrow">Tuyến thành viên</span>
+                    <strong>{memberRoutes.length} tuyến riêng</strong>
+                  </div>
+                  <Users size={18} />
+                </div>
+
+                <div className="member-route-list">
+                  {memberRoutes.length ? (
+                    memberRoutes.map((route) => {
+                      const isRouteVisible = visibleMemberRouteSet.has(route.id);
+
+                      return (
+                        <div className={isRouteVisible ? "member-route-row" : "member-route-row hidden"} key={route.id}>
+                          <span style={{ background: memberRouteColor(route.userId) }} />
+                          <div>
+                            <strong>{route.displayName}</strong>
+                            <small>
+                              {route.routePlan.totalDistanceKm} km · {formatDuration(route.routePlan.durationMinutes)}
+                            </small>
+                          </div>
+                          <button
+                            className={isRouteVisible ? "member-route-visible-button active" : "member-route-visible-button"}
+                            type="button"
+                            onClick={() => onToggleMemberRoute(route.id)}
+                          >
+                            {isRouteVisible ? "Ẩn" : "Hiện"}
+                          </button>
+                          {(route.userId === currentUserId || canManageMemberRoutes) && (
+                            <button className="member-route-delete-button" type="button" disabled={deletingMemberRouteId === route.id} onClick={() => onDeleteMemberRoute(route)}>
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p>Chưa có tuyến riêng của thành viên.</p>
+                  )}
+                </div>
+              </div>
+
+              <form className="map-marker-card" onSubmit={onCreateMapMarker}>
+                <div className="map-marker-head">
+                  <div>
+                    <span className="eyebrow">Đánh dấu</span>
+                    <strong>{mapMarkers.length} điểm trên map</strong>
+                  </div>
+                  <button className={isPlacingMapMarker ? "map-pick-button active" : "map-pick-button"} type="button" onClick={onToggleMapMarkerPlacement}>
+                    <MapPin size={15} />
+                    <span>{isPlacingMapMarker ? "Đang chọn" : "Chọn điểm"}</span>
+                  </button>
+                </div>
+
+                <div className="marker-kind-grid" aria-label="Loại điểm đánh dấu">
+                  {mapMarkerKinds.map((item) => {
+                    return (
+                      <button
+                        key={item.id}
+                        className={mapMarkerKind === item.id ? "active" : ""}
+                        type="button"
+                        onClick={() => onMapMarkerKindChange(item.id)}
+                      >
+                        <TrailMapIcon kind={item.id} />
+                        <span>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <input value={mapMarkerLabel} onChange={(event) => onMapMarkerLabelChange(event.target.value)} placeholder="Tên điểm đánh dấu" />
+
+                <p className={pendingMapMarker ? "marker-coordinate selected" : "marker-coordinate"}>
+                  {pendingMapMarker ? `${pendingMapMarker.lat.toFixed(5)}, ${pendingMapMarker.lng.toFixed(5)}` : "Bấm Chọn điểm rồi chạm vào bản đồ."}
+                </p>
+
+                <button className="map-marker-save" type="submit" disabled={!pendingMapMarker || isSavingMapMarker}>
+                  {isSavingMapMarker ? "Đang lưu" : "Lưu điểm"}
+                </button>
+
+                <div className="map-marker-list">
+                  {mapMarkers.length ? (
+                    mapMarkers.slice(0, 5).map((marker) => (
+                      <div className="map-marker-row" key={marker.id}>
+                        <span className={`map-marker-dot ${marker.kind}`}>
+                          <TrailMapIcon kind={marker.kind} />
+                        </span>
+                        <div>
+                          <strong>{marker.label}</strong>
+                          <small>{marker.displayName} - {formatLocationTime(marker.createdAt)}</small>
+                        </div>
+                        <button type="button" onClick={() => onPlanRouteToMapMarker(marker)}>
+                          Tới
+                        </button>
+                        <button type="button" disabled={deletingMapMarkerId === marker.id} onClick={() => onDeleteMapMarker(marker)}>
                           <Trash2 size={14} />
                         </button>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <p>Chưa có tuyến riêng của thành viên.</p>
-              )}
+                      </div>
+                    ))
+                  ) : (
+                    <p>Chưa có điểm đánh dấu nào.</p>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            <div className="waypoint-list">
+              {routePlan.waypoints.map((waypoint) => (
+                <WaypointCard key={waypoint.id} waypoint={waypoint} />
+              ))}
             </div>
           </div>
-
-          <form className="map-marker-card" onSubmit={onCreateMapMarker}>
-            <div className="map-marker-head">
-              <div>
-                <span className="eyebrow">Đánh dấu</span>
-                <strong>{mapMarkers.length} điểm trên map</strong>
-              </div>
-              <button className={isPlacingMapMarker ? "map-pick-button active" : "map-pick-button"} type="button" onClick={onToggleMapMarkerPlacement}>
-                <MapPin size={15} />
-                <span>{isPlacingMapMarker ? "Đang chọn" : "Chọn điểm"}</span>
-              </button>
-            </div>
-
-            <div className="marker-kind-grid" aria-label="Loại điểm đánh dấu">
-              {mapMarkerKinds.map((item) => {
-                return (
-                  <button
-                    key={item.id}
-                    className={mapMarkerKind === item.id ? "active" : ""}
-                    type="button"
-                    onClick={() => onMapMarkerKindChange(item.id)}
-                  >
-                    <TrailMapIcon kind={item.id} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <input value={mapMarkerLabel} onChange={(event) => onMapMarkerLabelChange(event.target.value)} placeholder="Tên điểm đánh dấu" />
-
-            <p className={pendingMapMarker ? "marker-coordinate selected" : "marker-coordinate"}>
-              {pendingMapMarker ? `${pendingMapMarker.lat.toFixed(5)}, ${pendingMapMarker.lng.toFixed(5)}` : "Bấm Chọn điểm rồi chạm vào bản đồ."}
-            </p>
-
-            <button className="map-marker-save" type="submit" disabled={!pendingMapMarker || isSavingMapMarker}>
-              {isSavingMapMarker ? "Đang lưu" : "Lưu điểm"}
-            </button>
-
-            <div className="map-marker-list">
-              {mapMarkers.length ? (
-                mapMarkers.slice(0, 5).map((marker) => (
-                  <div className="map-marker-row" key={marker.id}>
-                    <span className={`map-marker-dot ${marker.kind}`}>
-                      <TrailMapIcon kind={marker.kind} />
-                    </span>
-                    <div>
-                      <strong>{marker.label}</strong>
-                      <small>{marker.displayName} - {formatLocationTime(marker.createdAt)}</small>
-                    </div>
-                    <button type="button" onClick={() => onPlanRouteToMapMarker(marker)}>
-                      Tới
-                    </button>
-                    <button type="button" disabled={deletingMapMarkerId === marker.id} onClick={() => onDeleteMapMarker(marker)}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p>Chưa có điểm đánh dấu nào.</p>
-              )}
-            </div>
-          </form>
         </div>
-      </div>
-
-      <div className="waypoint-list">
-        {routePlan.waypoints.map((waypoint) => (
-          <WaypointCard key={waypoint.id} waypoint={waypoint} />
-        ))}
       </div>
     </section>
   );

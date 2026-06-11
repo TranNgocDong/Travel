@@ -2,38 +2,38 @@
 
 :root {
   color-scheme: light;
-  --bg: #f5f6f2;
+  --bg: #f8fafc;
   --panel: #ffffff;
-  --panel-soft: #eef3ef;
-  --text: #17211e;
-  --muted: #64706b;
-  --line: #d9e0da;
-  --accent: #0f766e;
-  --accent-strong: #0a5f59;
-  --accent-soft: #d8f2ec;
-  --amber: #b7791f;
-  --amber-soft: #fff2d8;
-  --danger: #b42318;
-  --danger-soft: #fee4df;
-  --shadow: 0 18px 42px rgba(23, 33, 30, 0.09);
+  --panel-soft: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --accent: #059669;
+  --accent-strong: #047857;
+  --accent-soft: #d1fae5;
+  --amber: #d97706;
+  --amber-soft: #fef3c7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #101614;
-  --panel: #18201d;
-  --panel-soft: #202a26;
-  --text: #eff7f3;
-  --muted: #a8b5af;
-  --line: #33413c;
-  --accent: #35c6b5;
-  --accent-strong: #65dfcf;
-  --accent-soft: #163a35;
-  --amber: #f0b45c;
-  --amber-soft: #3a2b17;
-  --danger: #ff897c;
-  --danger-soft: #3d1f1b;
-  --shadow: 0 18px 42px rgba(0, 0, 0, 0.25);
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-soft: #334155;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --line: #334155;
+  --accent: #10b981;
+  --accent-strong: #34d399;
+  --accent-soft: #064e3b;
+  --amber: #fbbf24;
+  --amber-soft: #451a03;
+  --danger: #f87171;
+  --danger-soft: #7f1d1d;
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -4623,12 +4623,13 @@ body {
   .app-shell[data-active-tab="route"] .trip-strip,
   .app-shell[data-active-tab="route"] .summary-grid,
   .app-shell[data-active-tab="route"] .live-sync-bar,
-  .app-shell[data-active-tab="route"] .trip-lifecycle {
+  .app-shell[data-active-tab="route"] .trip-lifecycle,
+  .app-shell[data-active-tab="route"] .trip-pulse-strip {
     display: none;
   }
 
   .app-shell[data-active-tab="route"] .top-bar {
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     padding: 8px;
   }
 
@@ -4637,6 +4638,10 @@ body {
   }
 
   .app-shell[data-active-tab="route"] .route-intel {
+    position: relative;
+    height: calc(100vh - 100px);
+    height: calc(100dvh - 100px);
+    overflow: hidden;
     margin: 0;
     border: 0;
     background: transparent;
@@ -4646,56 +4651,121 @@ body {
   }
 
   .app-shell[data-active-tab="route"] .route-intel > .panel-heading {
-    margin: 0 2px 8px;
-    padding: 0 2px;
+    display: none;
   }
 
   .app-shell[data-active-tab="route"] .route-builder {
-    gap: 7px;
-    margin-bottom: 10px;
-    border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--panel) 92%, transparent);
-    box-shadow: 0 12px 30px rgba(14, 34, 28, 0.1);
-    padding: 10px;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 
-  .app-shell[data-active-tab="route"] .route-builder input,
-  .app-shell[data-active-tab="route"] .route-builder button {
+  .app-shell[data-active-tab="route"] .route-builder .place-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-builder input {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 10px !important;
+    color: var(--text) !important;
+    padding: 8px 12px !important;
+    font-size: 0.88rem !important;
+    min-height: 40px !important;
+  }
+
+  .app-shell[data-active-tab="route"] .route-builder-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .app-shell[data-active-tab="route"] .route-builder-actions button {
     min-height: 40px;
+    border-radius: 12px;
+    font-weight: 800;
   }
 
   .app-shell[data-active-tab="route"] .route-intel-grid {
-    gap: 10px;
+    display: block;
+    position: relative;
+    height: 100%;
+    width: 100%;
+    gap: 0;
   }
 
   .app-shell[data-active-tab="route"] .route-map-panel {
-    overflow: hidden;
-    border-radius: 18px;
+    position: absolute;
+    inset: 0;
+    height: 100% !important;
+    z-index: 100;
+    border-radius: 0;
     padding: 0;
   }
 
-  .app-shell[data-active-tab="route"] .osm-map-shell {
-    height: calc(100svh - 322px);
-    min-height: 420px;
-    border: 0;
-    border-radius: 18px 18px 0 0;
+  .app-shell[data-active-tab="route"] .osm-map-shell,
+  .app-shell[data-active-tab="route"] .google-map-shell {
+    height: 100% !important;
+    min-height: 100% !important;
+    border-radius: 0;
+    border: none;
   }
 
   .app-shell[data-active-tab="route"] .route-map-head {
-    padding: 10px 12px 0;
+    display: none;
   }
 
   .app-shell[data-active-tab="route"] .route-alerts {
-    padding: 10px 12px 12px;
+    display: none;
+  }
+
+  .app-shell[data-active-tab="route"] .route-bottom-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1020;
+    background: rgba(30, 41, 59, 0.88);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.3);
+    height: calc(100% - 80px);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+
+  .app-shell[data-active-tab="route"] .route-bottom-sheet[data-state="collapsed"] {
+    transform: translateY(calc(100% - 68px));
+  }
+
+  .app-shell[data-active-tab="route"] .route-bottom-sheet[data-state="half"] {
+    transform: translateY(55%);
+  }
+
+  .app-shell[data-active-tab="route"] .route-bottom-sheet[data-state="expanded"] {
+    transform: translateY(12%);
   }
 
   .app-shell[data-active-tab="route"] .route-side-stack {
-    gap: 10px;
+    display: grid;
+    gap: 12px;
   }
 
   .app-shell[data-active-tab="route"] .waypoint-list {
-    display: none;
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
   }
 
   .route-card {
@@ -6688,4 +6758,1077 @@ body {
   .waymate-auth .auth-switch button {
     min-height: 36px;
   }
+}
+
+/* ==========================================
+   PREMIUM UI/UX & ANIMATION OVERRIDES
+   ========================================== */
+
+/* Glassmorphism & Smooth Theme Overrides */
+:root {
+  --glass-bg-light: rgba(255, 255, 255, 0.72);
+  --glass-bg-dark: rgba(24, 32, 29, 0.68);
+  --glass-border-light: rgba(255, 255, 255, 0.4);
+  --glass-border-dark: rgba(255, 255, 255, 0.06);
+  --shadow-premium: 0 16px 36px -4px rgba(12, 48, 42, 0.06), 0 4px 16px -2px rgba(12, 48, 42, 0.04);
+}
+
+:root[data-theme="dark"] {
+  --shadow-premium: 0 20px 48px -6px rgba(0, 0, 0, 0.32), 0 6px 20px -3px rgba(0, 0, 0, 0.24);
+}
+
+/* Base Body enhancement */
+body {
+  background: radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 3%, transparent), transparent 40%), var(--bg);
+  background-attachment: fixed;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Glassmorphism Panels */
+.expense-panel,
+.presence-panel,
+.settlement-panel,
+.member-manager-panel,
+.route-intel,
+.trip-lifecycle,
+.trip-recap-panel,
+.chat-panel {
+  background: var(--glass-bg-light) !important;
+  border: 1px solid var(--glass-border-light) !important;
+  backdrop-filter: blur(14px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(190%) !important;
+  box-shadow: var(--shadow-premium) !important;
+  border-radius: 16px !important;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease !important;
+}
+
+:root[data-theme="dark"] .expense-panel,
+:root[data-theme="dark"] .presence-panel,
+:root[data-theme="dark"] .settlement-panel,
+:root[data-theme="dark"] .member-manager-panel,
+:root[data-theme="dark"] .route-intel,
+:root[data-theme="dark"] .trip-lifecycle,
+:root[data-theme="dark"] .trip-recap-panel,
+:root[data-theme="dark"] .chat-panel {
+  background: var(--glass-bg-dark) !important;
+  border: 1px solid var(--glass-border-dark) !important;
+}
+
+/* Float & Hover Effects on Panels */
+.expense-panel:hover,
+.presence-panel:hover,
+.settlement-panel:hover,
+.member-manager-panel:hover,
+.route-intel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 44px -4px rgba(12, 48, 42, 0.1), 0 8px 20px -2px rgba(12, 48, 42, 0.06) !important;
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--line)) !important;
+}
+
+:root[data-theme="dark"] .expense-panel:hover,
+:root[data-theme="dark"] .presence-panel:hover,
+:root[data-theme="dark"] .settlement-panel:hover,
+:root[data-theme="dark"] .member-manager-panel:hover,
+:root[data-theme="dark"] .route-intel:hover {
+  box-shadow: 0 24px 54px -6px rgba(0, 0, 0, 0.45), 0 10px 24px -3px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Floating Header & Top Bar Navigation */
+.top-bar {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  padding: 10px 16px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+:root[data-theme="dark"] .top-bar {
+  background: rgba(24, 32, 29, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.brand-copy p {
+  background: linear-gradient(135deg, var(--text), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 1.15rem;
+}
+
+/* Premium Route Card design */
+.route-card {
+  border-radius: 16px !important;
+  border: 1px solid var(--glass-border-light) !important;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-soft) 85%, transparent), var(--panel)) !important;
+  box-shadow: var(--shadow-premium) !important;
+  position: relative;
+  overflow: hidden;
+}
+:root[data-theme="dark"] .route-card {
+  border: 1px solid var(--glass-border-dark) !important;
+  background: linear-gradient(135deg, var(--accent-soft), var(--panel)) !important;
+}
+.route-card::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%);
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* Premium Buttons & Interactive Elements */
+button, select, input {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+button:active {
+  transform: translateY(1px);
+  filter: brightness(0.95);
+}
+
+/* Category Chips */
+.category-chip {
+  border-radius: 12px !important;
+  background: var(--panel-soft) !important;
+  border: 1px solid transparent !important;
+  font-weight: 600 !important;
+  padding: 8px 14px !important;
+}
+.category-chip:hover {
+  background: color-mix(in srgb, var(--panel-soft) 80%, var(--accent-soft)) !important;
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  transform: translateY(-2px);
+}
+.category-chip.active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 20px -4px var(--accent) !important;
+  transform: translateY(-2px);
+}
+
+/* Currency Switcher & Mode Switcher */
+.currency-switch, .mode-switch {
+  background: var(--panel-soft) !important;
+  border-radius: 10px !important;
+  padding: 3px !important;
+  border: 1px solid var(--line) !important;
+}
+.currency-switch button, .mode-switch button {
+  border-radius: 7px !important;
+  font-weight: 700 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+.currency-switch button.active, .mode-switch button.active {
+  background: var(--panel) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Interactive inputs */
+.field input, .field select, .trip-manager select, .trip-create-form input {
+  border-radius: 10px !important;
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+}
+.field input:focus, .field select:focus, .trip-create-form input:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft) !important;
+  transform: translateY(-1px);
+}
+
+/* Members and Expense Items */
+.expense-item {
+  border-radius: 12px !important;
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  margin-bottom: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02) !important;
+}
+.expense-item:hover {
+  transform: translateX(4px) scale(1.01);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line)) !important;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04) !important;
+}
+
+.member-chip {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid var(--line) !important;
+  background: var(--panel) !important;
+  padding: 6px 12px !important;
+}
+.member-chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent) !important;
+}
+.member-chip.active {
+  background: var(--accent-soft) !important;
+  color: var(--accent-strong) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.08) !important;
+}
+
+/* Summary Tiles Sparkle styling */
+.summary-tile {
+  border-radius: 14px !important;
+  transition: all 0.3s ease !important;
+  border: 1px solid var(--line) !important;
+}
+.summary-tile:hover {
+  transform: scale(1.03) translateY(-2px);
+  border-color: var(--accent) !important;
+  box-shadow: var(--shadow-premium) !important;
+}
+.summary-tile > span {
+  transition: transform 0.3s ease;
+}
+.summary-tile:hover > span {
+  transform: rotate(8deg) scale(1.1);
+}
+
+/* Tabs Redesign */
+.mobile-tabs {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--line) !important;
+}
+:root[data-theme="dark"] .mobile-tabs {
+  background: rgba(24, 32, 29, 0.8) !important;
+}
+.mobile-tabs button {
+  border-radius: 9px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.mobile-tabs button:hover:not(.active) {
+  background: var(--panel-soft) !important;
+  color: var(--text) !important;
+}
+.mobile-tabs button.active {
+  background: var(--accent) !important;
+  box-shadow: 0 6px 16px -3px var(--accent) !important;
+}
+
+/* Animations */
+.expense-item, .summary-tile, .recap-card {
+  animation: slide-up-reveal 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.expense-item:nth-child(1) { animation-delay: 0.05s; }
+.expense-item:nth-child(2) { animation-delay: 0.1s; }
+.expense-item:nth-child(3) { animation-delay: 0.15s; }
+.expense-item:nth-child(4) { animation-delay: 0.2s; }
+
+@keyframes slide-up-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Live Sync Pulse Dot animation */
+.live-sync-bar {
+  position: relative;
+}
+.live-sync-bar::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  margin-right: 2px;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: pulse-sync-green 2s infinite;
+}
+:root[data-theme="dark"] .live-sync-bar::before {
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+}
+
+@keyframes pulse-sync-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+/* ==========================================
+   CODEX + ANTIGRAVITY UI STABILIZATION
+   Keep the premium travel feel, but protect mobile riding UX.
+   ========================================== */
+
+.route-map-panel {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, transparent), color-mix(in srgb, var(--panel-soft) 88%, transparent)),
+    var(--panel);
+}
+
+.route-map-panel,
+.google-map-shell,
+.osm-map-shell {
+  border-radius: 14px !important;
+}
+
+.google-place-search,
+.route-map-head,
+.route-alerts,
+.ride-cockpit {
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+}
+
+.route-intel:hover,
+.expense-panel:hover,
+.presence-panel:hover,
+.settlement-panel:hover,
+.member-manager-panel:hover {
+  transform: translateY(-1px);
+}
+
+.app-shell[data-active-tab="route"] .route-map-panel {
+  box-shadow: 0 18px 48px rgba(12, 48, 42, 0.08) !important;
+}
+
+.mobile-tabs {
+  box-shadow: 0 12px 34px rgba(12, 48, 42, 0.08) !important;
+}
+
+.mobile-tabs button.active {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #22c55e)) !important;
+}
+
+.chat-bubble,
+.map-fullscreen-button,
+.ride-mode-button,
+.map-follow-button {
+  will-change: transform;
+}
+
+@media (hover: none), (pointer: coarse) {
+  button:hover,
+  .expense-panel:hover,
+  .presence-panel:hover,
+  .settlement-panel:hover,
+  .member-manager-panel:hover,
+  .route-intel:hover,
+  .expense-item:hover,
+  .summary-tile:hover,
+  .member-chip:hover,
+  .category-chip:hover {
+    transform: none !important;
+    filter: none !important;
+  }
+
+  button:active {
+    transform: scale(0.985) !important;
+  }
+
+  .expense-panel,
+  .presence-panel,
+  .settlement-panel,
+  .member-manager-panel,
+  .route-intel,
+  .trip-lifecycle,
+  .trip-recap-panel,
+  .chat-panel {
+    backdrop-filter: blur(8px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(135%) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .top-bar {
+    margin-bottom: 12px;
+  }
+
+  .route-intel,
+  .expense-panel,
+  .presence-panel,
+  .settlement-panel,
+  .member-manager-panel,
+  .trip-lifecycle,
+  .trip-recap-panel {
+    border-radius: 12px !important;
+  }
+
+  .route-map-panel {
+    padding: 8px;
+  }
+
+  .google-place-search {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.12s !important;
+  }
+}
+
+/* ==========================================
+   ADVANCED WORKSPACE BACKDROP SLIDESHOW & RIDE COCKPIT STYLING
+   ========================================== */
+
+/* Morphing Background Slideshow */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -2;
+  overflow: hidden;
+  background-color: var(--bg);
+}
+
+.backdrop-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.06);
+  filter: blur(1px); /* Soft blur to ensure UI elements are crisp */
+  transition: opacity 2.5s ease-in-out, transform 8s ease-out !important;
+}
+
+.backdrop-img.active {
+  opacity: 0.05; /* Light Mode: very faint travel visual */
+  transform: scale(1);
+  z-index: 1;
+}
+
+:root[data-theme="dark"] .backdrop-img.active {
+  opacity: 0.11; /* Dark Mode: slightly visible glowing travel visual */
+}
+
+.backdrop-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 30%, var(--bg) 95%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Active Ride Mode Header Badge */
+.ride-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  background: var(--danger);
+  color: #ffffff;
+  padding: 2px 7px;
+  border-radius: 99px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);
+  animation: pulse-badge-red 1.8s infinite;
+}
+
+@keyframes pulse-badge-red {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5px rgba(220, 38, 38, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+}
+
+/* Trip Pulse Strip styling */
+.trip-pulse-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  margin-bottom: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.01);
+}
+
+.pulse-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: var(--muted);
+}
+
+.pulse-item svg {
+  color: var(--accent);
+}
+
+.pulse-item svg.pulse-gps {
+  animation: gps-pulse 2s infinite ease-in-out;
+  color: var(--danger);
+}
+
+@keyframes gps-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+
+.pulse-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--muted);
+}
+
+.pulse-indicator.live {
+  background: #22c55e;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  animation: pulse-sync-green 2s infinite;
+}
+
+/* POI Active Filter buttons override for clearer state */
+.poi-filter-grid button.active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px -3px var(--accent) !important;
+  transform: translateY(-1px);
+}
+
+.poi-filter-grid button.active img {
+  filter: brightness(0) invert(1) !important; /* Make icon white when button is active */
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--line) 65%, transparent);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* ==========================================
+   ADVANCED INTERACTIVE MICRO-ANIMATIONS
+   ========================================== */
+
+/* 1. Flowing Route Line & Pulsing Stops */
+.route-line::before {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--amber) 50%, var(--accent) 100%);
+  background-size: 200% auto;
+  animation: travel-flow 2.2s linear infinite;
+  content: "";
+  border-radius: 99px;
+}
+
+@keyframes travel-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.route-line span {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--accent);
+  border-radius: 999px;
+  background: var(--panel);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.route-line span:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 8px var(--accent);
+  border-color: var(--accent-strong);
+}
+
+/* 2. Elastic Refresh Spin */
+.live-sync-bar .spinning {
+  animation: spin-elastic 1.2s cubic-bezier(0.68, -0.6, 0.32, 1.6) infinite;
+}
+
+@keyframes spin-elastic {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 3. Chat Message Spring Pop */
+.chat-message {
+  animation: message-spring 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.12) both;
+}
+
+@keyframes message-spring {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 4. Plus Icon 90-Degree Hover Rotation */
+.trip-create-form button:hover svg,
+.panel-heading button:hover svg {
+  transform: rotate(90deg);
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+}
+
+.trip-create-form button svg,
+.panel-heading button svg {
+  transition: transform 0.3s ease !important;
+}
+
+/* 5. Staggered Panel Slide-in on load */
+.expense-panel, .route-intel {
+  animation: slide-in-left-cockpit 0.6s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+.group-stack > * {
+  animation: slide-in-right-cockpit 0.6s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@keyframes slide-in-left-cockpit {
+  0% {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right-cockpit {
+  0% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ==========================================
+   MOBILE-FIRST COCKPIT OPTIMIZATION
+   ========================================== */
+
+@media (max-width: 719px) {
+  /* Hide administrative elements on the Map tab to prioritize cockpit navigation */
+  .app-shell[data-active-tab="route"] .trip-manager,
+  .app-shell[data-active-tab="route"] .summary-grid,
+  .app-shell[data-active-tab="route"] .trip-pulse-strip {
+    display: none !important;
+  }
+
+  /* Make map fill 100% height of di động cockpit */
+  .app-shell[data-active-tab="route"] .osm-map-shell,
+  .app-shell[data-active-tab="route"] .google-map-shell {
+    height: 100% !important;
+    min-height: 100% !important;
+  }
+
+  /* Minimize top bar height on map view */
+  .app-shell[data-active-tab="route"] .top-bar {
+    margin-bottom: 6px !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Mobile page transition for all tab views */
+  .app-shell[data-active-tab="route"] .route-intel,
+  .app-shell[data-active-tab="expenses"] .workspace,
+  .app-shell[data-active-tab="group"] .workspace,
+  .app-shell[data-active-tab="recap"] .trip-recap-panel {
+    animation: tab-slide-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+
+@keyframes tab-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Disable scale animations under prefers-reduced-motion query */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop-img {
+    transform: none !important;
+    transition: opacity 1s ease-in-out !important;
+  }
+  .backdrop-img.active {
+    transform: none !important;
+  }
+  .ride-mode-badge,
+  .pulse-item svg.pulse-gps,
+  .pulse-indicator.live,
+  .route-line::before,
+  .route-line span {
+    animation: none !important;
+    transform: none !important;
+  }
+  .app-shell[data-active-tab] * {
+    animation: none !important;
+  }
+}
+
+/* ==========================================
+   ROUTE BOTTOM SHEET & MULTI-STATE DRAW SYSTEM
+   ========================================== */
+
+.bottom-sheet-handle-container {
+  padding: 8px 16px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  user-select: none;
+}
+
+.bottom-sheet-handle {
+  width: 40px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 99px;
+  margin-bottom: 6px;
+}
+
+.bottom-sheet-title {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bottom-sheet-title span {
+  font-size: 0.9rem;
+  font-weight: 850;
+  color: var(--text);
+}
+
+.bottom-sheet-title small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.bottom-sheet-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 720px) {
+  .route-bottom-sheet {
+    display: contents;
+  }
+  .bottom-sheet-handle-container {
+    display: none;
+  }
+  .bottom-sheet-content {
+    display: contents;
+  }
+  .route-intel-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2.7fr) minmax(320px, 1fr) !important;
+    gap: 16px !important;
+  }
+
+  .route-map-panel {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .route-builder {
+    grid-column: 2;
+    grid-row: 1;
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+    display: grid !important;
+    gap: 12px !important;
+    margin-bottom: 0 !important;
+    position: static !important;
+  }
+
+  .route-side-stack {
+    grid-column: 2;
+    grid-row: 2;
+    align-content: start;
+  }
+
+  .waypoint-list {
+    grid-column: 1 / -1;
+    margin-top: 16px;
+  }
+}
+
+@media (max-width: 719px) {
+  .ride-mode-button,
+  .map-fullscreen-button {
+    width: 42px !important;
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(30, 41, 59, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  }
+
+  .ride-mode-button span,
+  .map-fullscreen-button span {
+    display: none !important;
+  }
+
+  .ride-mode-button {
+    left: 12px !important;
+    top: 12px !important;
+  }
+
+  .map-fullscreen-button {
+    right: 12px !important;
+    top: 12px !important;
+  }
+
+  .poi-list {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 12px !important;
+    padding: 4px 2px 12px !important;
+    scrollbar-width: none !important;
+    max-height: none !important;
+  }
+
+  .poi-list::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .poi-row {
+    flex: 0 0 280px !important;
+    scroll-snap-align: start !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* ==========================================
+   STRAVA-STYLE VERTICAL ROUTE TIMELINE
+   ========================================== */
+
+.waypoint-list {
+  position: relative;
+  padding-left: 20px;
+  margin-left: 8px;
+}
+
+.waypoint-list::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  background: linear-gradient(180deg, var(--accent) 0%, rgba(56, 189, 248, 0.15) 100%);
+}
+
+.waypoint-card {
+  position: relative;
+  background: rgba(30, 41, 59, 0.45);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.06) !important; /* override the old thick solid left border */
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  margin-bottom: 10px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.waypoint-card:hover {
+  border-color: rgba(56, 189, 248, 0.3) !important;
+  transform: translateX(2px);
+}
+
+.waypoint-card::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 8px var(--accent);
+  z-index: 2;
+}
+
+.waypoint-card.risk-medium::before {
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber);
+}
+
+.waypoint-card.risk-high::before {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+}
+
+/* ==========================================
+   AIRBNB-STYLE POINTS OF INTEREST (POIs)
+   ========================================== */
+
+.poi-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.poi-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(30, 41, 59, 0.55) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 16px !important;
+  padding: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.poi-row:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  border-color: rgba(56, 189, 248, 0.2) !important;
+}
+
+.poi-dot {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px !important;
+  background: rgba(56, 189, 248, 0.1) !important;
+  color: var(--accent) !important;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.poi-dot.food {
+  background: rgba(234, 88, 12, 0.12) !important;
+  color: #f97316 !important;
+}
+
+.poi-dot.lodging {
+  background: rgba(124, 58, 237, 0.12) !important;
+  color: #a78bfa !important;
+}
+
+.poi-dot.fuel {
+  background: rgba(22, 163, 74, 0.12) !important;
+  color: #4ade80 !important;
+}
+
+.poi-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.poi-row strong {
+  font-size: 0.88rem !important;
+  font-weight: 800 !important;
+  color: var(--text) !important;
+}
+
+.poi-row small {
+  font-size: 0.74rem !important;
+  color: var(--muted) !important;
+}
+
+.poi-row button {
+  min-height: 30px !important;
+  padding: 0 12px !important;
+  border-radius: 20px !important;
+  border: 1px solid rgba(56, 189, 248, 0.3) !important;
+  background: transparent !important;
+  color: var(--accent) !important;
+  font-weight: 850 !important;
+  font-size: 0.74rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.poi-row button:hover {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
 }
