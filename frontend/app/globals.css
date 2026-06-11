@@ -7832,3 +7832,116 @@ button:active {
   color: #ffffff !important;
   border-color: var(--accent) !important;
 }
+
+/* ==========================================
+   LIGHT MODE COCKPIT READABILITY FIXES
+   Keep the Apple Maps-like glass style, but avoid dark hard-coded panels
+   when the user switches the app to light mode.
+   ========================================== */
+
+:root:not([data-theme="dark"]) .app-shell[data-active-tab="route"] .route-bottom-sheet {
+  background: rgba(248, 250, 252, 0.94);
+  border-top-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 -10px 34px rgba(15, 23, 42, 0.14);
+}
+
+:root:not([data-theme="dark"]) .bottom-sheet-handle {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+:root:not([data-theme="dark"]) .bottom-sheet-handle-container {
+  border-bottom-color: rgba(15, 23, 42, 0.08);
+}
+
+:root:not([data-theme="dark"]) .app-shell[data-active-tab="route"] .route-builder {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+:root:not([data-theme="dark"]) .app-shell[data-active-tab="route"] .route-builder input {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  color: #0f172a !important;
+}
+
+:root:not([data-theme="dark"]) .app-shell[data-active-tab="route"] .route-builder input::placeholder {
+  color: rgba(15, 23, 42, 0.5);
+}
+
+:root:not([data-theme="dark"]) .ride-mode-button,
+:root:not([data-theme="dark"]) .map-fullscreen-button {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #0f172a !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.14) !important;
+}
+
+:root:not([data-theme="dark"]) .ride-mode-button.active,
+:root:not([data-theme="dark"]) .route-map-panel.map-fullscreen .ride-mode-button,
+:root:not([data-theme="dark"]) .route-map-panel.map-fullscreen .map-fullscreen-button {
+  color: #ffffff !important;
+}
+
+:root:not([data-theme="dark"]) .waypoint-card,
+:root:not([data-theme="dark"]) .poi-row {
+  background: rgba(255, 255, 255, 0.86) !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+:root:not([data-theme="dark"]) .waypoint-card::before {
+  border-color: #f8fafc;
+}
+
+:root:not([data-theme="dark"]) .poi-row:hover,
+:root:not([data-theme="dark"]) .waypoint-card:hover {
+  border-color: rgba(56, 189, 248, 0.35) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+:root:not([data-theme="dark"]) .next-stop-card,
+:root:not([data-theme="dark"]) .poi-card,
+:root:not([data-theme="dark"]) .group-location-card {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+/* Mobile route tab should behave like one fixed map cockpit, not a scroll page. */
+@media (max-width: 719px) {
+  .app-shell[data-active-tab="route"] {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(6px, env(safe-area-inset-bottom));
+  }
+
+  .app-shell[data-active-tab="route"] .top-bar {
+    flex: 0 0 auto;
+  }
+
+  .app-shell[data-active-tab="route"] .route-intel {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+
+  .app-shell[data-active-tab="route"] .route-intel-grid {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .app-shell[data-active-tab="route"] .route-map-panel {
+    inset: 0;
+  }
+
+  .app-shell[data-active-tab="route"] .route-bottom-sheet {
+    height: calc(100% - 72px);
+    max-height: calc(100% - 72px);
+  }
+}
