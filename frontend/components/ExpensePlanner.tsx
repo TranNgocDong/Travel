@@ -18,12 +18,14 @@ import {
   Minimize2,
   Moon,
   Navigation,
+  Phone,
   Plus,
   ReceiptText,
   RefreshCw,
   RotateCcw,
   Send,
   ShieldCheck,
+  Smile,
   Sun,
   Users,
   WalletCards,
@@ -85,6 +87,9 @@ import {
   type ApiTripPoiKind,
   type ApiTripLiveEvent,
   type ApiTripMember,
+  type ApiTripMemberAvatarColor,
+  type ApiTripMemberBackgroundKey,
+  type ApiTripMemberTravelStatus,
   type ApiTripMessage,
   type ApiTripRole,
   type ApiTripStatus,
@@ -97,6 +102,22 @@ type TripMemberView = Member & {
   role: ApiTripRole;
   active: boolean;
   removedAt: string | null;
+  phoneNumber: string | null;
+  homeBase: string | null;
+  travelStatus: ApiTripMemberTravelStatus;
+  statusEmoji: string;
+  avatarColor: ApiTripMemberAvatarColor;
+  backgroundKey: ApiTripMemberBackgroundKey;
+};
+
+type MemberProfileDraft = {
+  displayName: string;
+  phoneNumber: string;
+  homeBase: string;
+  travelStatus: ApiTripMemberTravelStatus;
+  statusEmoji: string;
+  avatarColor: ApiTripMemberAvatarColor;
+  backgroundKey: ApiTripMemberBackgroundKey;
 };
 
 type MobileTab = "route" | "expenses" | "group" | "recap";
@@ -118,6 +139,33 @@ type FocusedLocationRequest = {
   userId: string;
   requestedAt: number;
 };
+
+const defaultProfileDraft: MemberProfileDraft = {
+  displayName: "",
+  phoneNumber: "",
+  homeBase: "",
+  travelStatus: "riding",
+  statusEmoji: "🛵",
+  avatarColor: "teal",
+  backgroundKey: "forest",
+};
+
+const travelStatusOptions: Array<{ id: ApiTripMemberTravelStatus; label: string; emoji: string }> = [
+  { id: "riding", label: "Đang chạy", emoji: "🛵" },
+  { id: "resting", label: "Đang nghỉ", emoji: "☕" },
+  { id: "need-help", label: "Cần hỗ trợ", emoji: "🆘" },
+  { id: "offline", label: "Tạm offline", emoji: "🌙" },
+];
+
+const avatarColorOptions: ApiTripMemberAvatarColor[] = ["teal", "sky", "green", "amber", "rose", "violet"];
+
+const backgroundOptions: Array<{ id: ApiTripMemberBackgroundKey; label: string }> = [
+  { id: "forest", label: "Rừng núi" },
+  { id: "coast", label: "Biển" },
+  { id: "mountain", label: "Đèo" },
+  { id: "night", label: "Đêm" },
+  { id: "sunrise", label: "Bình minh" },
+];
 
 const categories = [
   { id: "fuel", label: "Xăng", icon: Fuel },
@@ -429,6 +477,7 @@ export function ExpensePlanner() {
   const [splitMode, setSplitMode] = useState<SplitMode>("equal");
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [splitValues, setSplitValues] = useState<Record<string, string>>({});
+  const [showExpenseAdvanced, setShowExpenseAdvanced] = useState(false);
   const [offlineReady, setOfflineReady] = useState(false);
   const [isUsingOfflineRoute, setIsUsingOfflineRoute] = useState(false);
   const [queuedExpenseCount, setQueuedExpenseCount] = useState(0);
@@ -449,6 +498,8 @@ export function ExpensePlanner() {
   const [locationShareStatus, setLocationShareStatus] = useState<LocationShareStatus>("idle");
   const [apiError, setApiError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
+  const [profileDraft, setProfileDraft] = useState<MemberProfileDraft>(defaultProfileDraft);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [showEntryAnimation, setShowEntryAnimation] = useState(false);
   const [newTripTitle, setNewTripTitle] = useState("");
   const [newMemberName, setNewMemberName] = useState("");
@@ -860,6 +911,7 @@ export function ExpensePlanner() {
     [expenses],
   );
   const activeMembers = useMemo(() => members.filter((member) => member.active), [members]);
+  const currentMember = currentUser ? activeMembers.find((member) => member.id === currentUser.id) ?? null : null;
   const currentTripRole = activeMembers.find((member) => member.id === currentUser?.id)?.role ?? "viewer";
   const canManageTripMembers = currentTripRole === "owner";
   const isCurrentTripMember = Boolean(currentUser && activeMembers.some((member) => member.id === currentUser.id));
@@ -867,6 +919,25 @@ export function ExpensePlanner() {
   const canManageMemberRoutes = currentTripRole === "owner";
   const activeTrip = trips.find((trip) => trip.id === selectedTripId);
   const visibleMemberRouteSet = useMemo(() => new Set(visibleMemberRouteIds), [visibleMemberRouteIds]);
+
+  useEffect(() => {
+    if (!currentMember) {
+      setProfileDraft(defaultProfileDraft);
+      return;
+    }
+
+    setProfileDraft(memberToProfileDraft(currentMember));
+  }, [
+    currentMember?.id,
+    currentMember?.name,
+    currentMember?.phoneNumber,
+    currentMember?.homeBase,
+    currentMember?.travelStatus,
+    currentMember?.statusEmoji,
+    currentMember?.avatarColor,
+    currentMember?.backgroundKey,
+  ]);
+
   const syncStatusValue = queuedExpenseCount
     ? `Cho ${queuedExpenseCount}`
     : isLiveSyncConnected
@@ -1939,6 +2010,43 @@ export function ExpensePlanner() {
     }
   }
 
+  function updateProfileDraft<K extends keyof MemberProfileDraft>(key: K, value: MemberProfileDraft[K]) {
+    setProfileDraft((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  async function handleSaveMemberProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!currentUser || !currentMember) {
+      return;
+    }
+
+    setIsSavingProfile(true);
+    setApiError(null);
+
+    try {
+      const nextStatusEmoji = profileDraft.statusEmoji.trim() || travelStatusEmoji(profileDraft.travelStatus);
+
+      await updateTripMember(currentUser.id, {
+        displayName: profileDraft.displayName.trim(),
+        phoneNumber: profileDraft.phoneNumber.trim() || null,
+        homeBase: profileDraft.homeBase.trim() || null,
+        travelStatus: profileDraft.travelStatus,
+        statusEmoji: nextStatusEmoji,
+        avatarColor: profileDraft.avatarColor,
+        backgroundKey: profileDraft.backgroundKey,
+      }, selectedTripId);
+      await loadTripData();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Không lưu được hồ sơ");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
   if (!currentUser) {
     return <AuthScreen theme={theme} onAuthenticated={setCurrentUser} onThemeToggle={toggleTheme} />;
   }
@@ -2009,6 +2117,7 @@ export function ExpensePlanner() {
         </form>
       </section>
 
+      {activeTab === "route" && (
       <section className="trip-strip" aria-label="Thông tin chặng đi">
         <div className="route-card">
           <div>
@@ -2028,10 +2137,12 @@ export function ExpensePlanner() {
 
         <div className={offlineReady ? "offline-pill ready" : "offline-pill"} aria-live="polite">
           {offlineReady ? <Check size={16} /> : <Download size={16} />}
-          <span>{isUsingOfflineRoute ? "Đang xem offline" : offlineReady ? "Đã lưu offline" : "Chưa lưu offline"}</span>
+          <span>{isUsingOfflineRoute ? "Đang dùng bản đã lưu" : offlineReady ? "Đã lưu khi mất mạng" : "Chưa lưu khi mất mạng"}</span>
         </div>
       </section>
+      )}
 
+      {activeTab === "expenses" && (
       <section className="summary-grid" aria-label="Tổng quan chi phí">
         <SummaryTile icon={<WalletCards size={18} />} label="Tổng chi" value={formatMoney(totalVnd)} />
         <SummaryTile icon={<ArrowRightLeft size={18} />} label="Cần trả" value={`${settlements.length} lượt`} />
@@ -2042,6 +2153,7 @@ export function ExpensePlanner() {
           value={syncStatusValue}
         />
       </section>
+      )}
 
       <div className={appNavRailClass(isAppRailOpen, isAppRailMinimized, appRailSide)}>
         <button
@@ -2099,8 +2211,8 @@ export function ExpensePlanner() {
             ? "Đang cập nhật dữ liệu nhóm..."
             : isLiveSyncConnected
               ? lastLiveSyncEvent
-                ? `Live sync: ${liveEventLabel(lastLiveSyncEvent.type)}`
-                : "Live sync đang bật"
+                ? `Đang đồng bộ: ${liveEventLabel(lastLiveSyncEvent.type)}`
+                : "Đang đồng bộ"
               : lastSyncedAt
                 ? `Đã đồng bộ lúc ${formatSyncTime(lastSyncedAt)}`
                 : "Chưa đồng bộ dữ liệu nhóm"}
@@ -2132,7 +2244,7 @@ export function ExpensePlanner() {
         </div>
       )}
 
-      {activeTrip && trips.length > 0 && (
+      {activeTab === "recap" && activeTrip && trips.length > 0 && (
         <TripLifecyclePanel
           canManage={canManageTripMembers}
           expenses={expenses}
@@ -2145,7 +2257,7 @@ export function ExpensePlanner() {
         />
       )}
 
-      {activeTrip && trips.length > 0 && (activeTrip.status !== "active" || activeTab === "recap") && (
+      {activeTab === "recap" && activeTrip && trips.length > 0 && (
         <TripRecapPanel
           balances={balances}
           expenses={expenses}
@@ -2168,7 +2280,7 @@ export function ExpensePlanner() {
         </section>
       )}
 
-      {routePlan && trips.length > 0 && (
+      {activeTab === "route" && routePlan && trips.length > 0 && (
         <RouteIntelligence
           destination={routeDestination}
           currentUserId={currentUser.id}
@@ -2247,37 +2359,6 @@ export function ExpensePlanner() {
               <span>Số tiền</span>
               <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" />
             </label>
-            <div className="currency-switch" aria-label="Tiền tệ">
-              {(["VND", "USD", "CNY"] satisfies CurrencyCode[]).map((code) => (
-                <button
-                  key={code}
-                  className={currency === code ? "active" : ""}
-                  type="button"
-                  onClick={() => setCurrency(code)}
-                  title={code}
-                >
-                  {code}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="category-row" aria-label="Danh mục">
-            {categories.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <button
-                  key={item.id}
-                  className={category === item.id ? "category-chip active" : "category-chip"}
-                  type="button"
-                  onClick={() => setCategory(item.id)}
-                >
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
           </div>
 
           <div className="select-row">
@@ -2291,14 +2372,6 @@ export function ExpensePlanner() {
                 ))}
               </select>
             </label>
-
-            <div className="mode-switch" aria-label="Kiểu chia">
-              {(["equal", "percent", "share"] satisfies SplitMode[]).map((mode) => (
-                <button key={mode} className={splitMode === mode ? "active" : ""} type="button" onClick={() => setSplitMode(mode)}>
-                  {modeLabel(mode)}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="member-grid" aria-label="Người tham gia">
@@ -2318,6 +2391,54 @@ export function ExpensePlanner() {
               );
             })}
           </div>
+
+          <button className="advanced-toggle" type="button" aria-expanded={showExpenseAdvanced} onClick={() => setShowExpenseAdvanced((current) => !current)}>
+            {showExpenseAdvanced ? "Ẩn tùy chỉnh" : "Tùy chỉnh thêm"}
+          </button>
+
+          {showExpenseAdvanced && (
+            <div className="expense-advanced">
+              <div className="currency-switch" aria-label="Tiền tệ">
+                {(["VND", "USD", "CNY"] satisfies CurrencyCode[]).map((code) => (
+                  <button
+                    key={code}
+                    className={currency === code ? "active" : ""}
+                    type="button"
+                    onClick={() => setCurrency(code)}
+                    title={code}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+
+              <div className="category-row" aria-label="Danh mục">
+                {categories.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <button
+                      key={item.id}
+                      className={category === item.id ? "category-chip active" : "category-chip"}
+                      type="button"
+                      onClick={() => setCategory(item.id)}
+                    >
+                      <Icon size={16} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mode-switch" aria-label="Kiểu chia">
+                {(["equal", "percent", "share"] satisfies SplitMode[]).map((mode) => (
+                  <button key={mode} className={splitMode === mode ? "active" : ""} type="button" onClick={() => setSplitMode(mode)}>
+                    {modeLabel(mode)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {splitMode !== "equal" && (
             <div className="split-grid" aria-label="Giá trị chia">
@@ -2345,7 +2466,21 @@ export function ExpensePlanner() {
           </div>
         </form>
 
+        <div className="expense-side-stack">
+          <SettlementPanel balances={balances} members={members} settlements={settlements} />
+        </div>
+
         <div className="group-stack">
+          {currentMember && (
+            <MemberProfilePanel
+              draft={profileDraft}
+              isSaving={isSavingProfile}
+              member={currentMember}
+              onDraftChange={updateProfileDraft}
+              onSave={handleSaveMemberProfile}
+            />
+          )}
+
           <PresencePanel
             currentUserId={currentUser.id}
             isPlanningRoute={isPlanningRoute}
@@ -2353,6 +2488,7 @@ export function ExpensePlanner() {
             isUsingCurrentLocation={isUsingCurrentLocation}
             locationAddresses={locationAddresses}
             memberLocations={memberLocations}
+            members={members}
             onFocusLocation={handleFocusMemberLocation}
             onPlanRouteToMember={handlePlanRouteToMember}
             onResolveAddress={handleResolveMemberAddress}
@@ -2360,8 +2496,6 @@ export function ExpensePlanner() {
             presenceUsers={presenceUsers}
             selectedUserId={selectedPresenceUserId}
           />
-
-          <SettlementPanel balances={balances} members={members} settlements={settlements} />
 
           <MemberManagerPanel
             canManageTripMembers={canManageTripMembers}
@@ -2676,6 +2810,125 @@ function ChatDock({
   );
 }
 
+function MemberProfilePanel({
+  draft,
+  isSaving,
+  member,
+  onDraftChange,
+  onSave,
+}: {
+  draft: MemberProfileDraft;
+  isSaving: boolean;
+  member: TripMemberView;
+  onDraftChange: <K extends keyof MemberProfileDraft>(key: K, value: MemberProfileDraft[K]) => void;
+  onSave: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const phoneHref = safeTelHref(member.phoneNumber);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  return (
+    <section className={`member-profile-panel profile-bg-${draft.backgroundKey}`} aria-label="Hồ sơ của tôi">
+      <div className="member-profile-head">
+        <Avatar member={member} />
+        <div>
+          <span className="eyebrow">Hồ sơ trong phòng</span>
+          <h2>{member.name}</h2>
+          <p>
+            {member.statusEmoji || travelStatusEmoji(member.travelStatus)} {travelStatusLabel(member.travelStatus)}
+            {member.homeBase ? ` · ${member.homeBase}` : ""}
+          </p>
+        </div>
+        {phoneHref && (
+          <a className="profile-call-button" href={phoneHref} aria-label="Gọi nhanh">
+            <Phone size={18} />
+          </a>
+        )}
+      </div>
+
+      <form className="member-profile-form" onSubmit={onSave}>
+        <label className="field">
+          <span>Tên hiển thị</span>
+          <input value={draft.displayName} maxLength={80} onChange={(event) => onDraftChange("displayName", event.target.value)} />
+        </label>
+
+        <div className="profile-inline-grid">
+          <label className="field">
+            <span>Số điện thoại</span>
+            <input value={draft.phoneNumber} inputMode="tel" maxLength={24} placeholder="Ví dụ: 090..." onChange={(event) => onDraftChange("phoneNumber", event.target.value)} />
+          </label>
+
+          <label className="field">
+            <span>Trạng thái</span>
+            <select
+              value={draft.travelStatus}
+              onChange={(event) => {
+                const nextStatus = event.target.value as ApiTripMemberTravelStatus;
+                onDraftChange("travelStatus", nextStatus);
+                onDraftChange("statusEmoji", travelStatusEmoji(nextStatus));
+              }}
+            >
+              {travelStatusOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.emoji} {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <button className="advanced-toggle compact" type="button" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((current) => !current)}>
+          {showAdvanced ? "Ẩn chỉnh thêm" : "Chỉnh thêm"}
+        </button>
+
+        {showAdvanced && (
+          <div className="profile-advanced">
+            <div className="profile-inline-grid">
+              <label className="field">
+                <span>Nơi ở</span>
+                <input value={draft.homeBase} maxLength={80} placeholder="Ví dụ: Sóc Trăng" onChange={(event) => onDraftChange("homeBase", event.target.value)} />
+              </label>
+
+              <label className="field">
+                <span>Emoji</span>
+                <input value={draft.statusEmoji} maxLength={4} onChange={(event) => onDraftChange("statusEmoji", event.target.value)} />
+              </label>
+            </div>
+
+            <div className="profile-picker-row" aria-label="Màu đại diện">
+              {avatarColorOptions.map((color) => (
+                <button
+                  key={color}
+                  className={draft.avatarColor === color ? `profile-swatch ${color} active` : `profile-swatch ${color}`}
+                  type="button"
+                  title={`Màu ${color}`}
+                  aria-label={`Chọn màu ${color}`}
+                  onClick={() => onDraftChange("avatarColor", color)}
+                />
+              ))}
+            </div>
+
+            <label className="field">
+              <span>Hình nền thẻ</span>
+              <select value={draft.backgroundKey} onChange={(event) => onDraftChange("backgroundKey", event.target.value as ApiTripMemberBackgroundKey)}>
+                {backgroundOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        <button className="profile-save-button" type="submit" disabled={isSaving || !draft.displayName.trim()}>
+          <Smile size={17} />
+          <span>{isSaving ? "Đang lưu..." : "Lưu hồ sơ"}</span>
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function PresencePanel({
   currentUserId,
   isPlanningRoute,
@@ -2683,6 +2936,7 @@ function PresencePanel({
   isUsingCurrentLocation,
   locationAddresses,
   memberLocations,
+  members,
   onFocusLocation,
   onPlanRouteToMember,
   onResolveAddress,
@@ -2696,6 +2950,7 @@ function PresencePanel({
   isUsingCurrentLocation: boolean;
   locationAddresses: Record<string, ApiMemberLocationAddress>;
   memberLocations: ApiMemberLocation[];
+  members: TripMemberView[];
   onFocusLocation: (location: ApiMemberLocation) => void;
   onPlanRouteToMember: (location: ApiMemberLocation) => void;
   onResolveAddress: (location: ApiMemberLocation) => void;
@@ -2716,10 +2971,14 @@ function PresencePanel({
       <div className="presence-list">
         {presenceUsers.length ? (
           presenceUsers.map((user) => {
+            const member = members.find((item) => item.id === user.userId);
             const location = memberLocations.find((item) => item.userId === user.userId);
             const address = locationAddresses[user.userId];
             const isSelected = selectedUserId === user.userId;
             const canRouteToMember = Boolean(location && user.userId !== currentUserId && !isPlanningRoute && !isUsingCurrentLocation);
+            const phoneHref = safeTelHref(member?.phoneNumber ?? null);
+            const status = member?.travelStatus ?? "riding";
+            const statusEmoji = member?.statusEmoji || travelStatusEmoji(status);
 
             return (
               <article className={isSelected ? "presence-item selected" : "presence-item"} key={user.userId}>
@@ -2728,11 +2987,11 @@ function PresencePanel({
                   type="button"
                   onClick={() => onSelectUser(user.userId)}
                 >
-                  <Avatar member={{ id: user.userId, name: user.displayName, initials: createInitials(user.displayName) }} />
+                  <Avatar member={member ?? { id: user.userId, name: user.displayName, initials: createInitials(user.displayName) }} />
                   <div>
                     <strong>{user.userId === currentUserId ? "Bạn" : user.displayName}</strong>
                     <span>
-                      Online từ {formatLocationTime(user.onlineSince)}
+                      {statusEmoji} {travelStatusLabel(status)} · Online từ {formatLocationTime(user.onlineSince)}
                       {user.connectionCount > 1 ? ` - ${user.connectionCount} thiết bị` : ""}
                     </span>
                   </div>
@@ -2756,11 +3015,33 @@ function PresencePanel({
                             <MapPin size={15} />
                             <span>{isResolvingAddressFor === user.userId ? "Đang lấy..." : "Lấy địa chỉ"}</span>
                           </button>
+                          {phoneHref && (
+                            <a href={phoneHref}>
+                              <Phone size={15} />
+                              <span>Gọi</span>
+                            </a>
+                          )}
                         </div>
-                        <p>{address ? address.address : `GPS cập nhật ${formatLocationTime(location.sharedAt)}`}</p>
+                        <p>
+                          {member?.homeBase ? `${member.homeBase} · ` : ""}
+                          {address ? address.address : `GPS cập nhật ${formatLocationTime(location.sharedAt)}`}
+                        </p>
                       </>
                     ) : (
-                      <p>Người này đang online nhưng chưa bật chia sẻ GPS.</p>
+                      <>
+                        {phoneHref && (
+                          <div className="presence-action-buttons single">
+                            <a href={phoneHref}>
+                              <Phone size={15} />
+                              <span>Gọi</span>
+                            </a>
+                          </div>
+                        )}
+                        <p>
+                          {member?.homeBase ? `${member.homeBase} · ` : ""}
+                          Người này đang online nhưng chưa bật chia sẻ GPS.
+                        </p>
+                      </>
                     )}
                   </div>
                 )}
@@ -2868,7 +3149,7 @@ function MemberManagerPanel({
           <span className="eyebrow">Quản lý nhóm</span>
           <h2>Thành viên</h2>
         </div>
-        <span className="role-pill">{currentTripRole}</span>
+        <span className="role-pill">{roleLabel(currentTripRole)}</span>
       </div>
 
       <form className="member-add-form" onSubmit={onAddMember}>
@@ -2885,9 +3166,9 @@ function MemberManagerPanel({
           disabled={!canManageTripMembers}
         />
         <select value={newMemberRole} onChange={(event) => onMemberRoleChange(event.target.value as ApiTripRole)} disabled={!canManageTripMembers}>
-          <option value="viewer">viewer</option>
-          <option value="editor">editor</option>
-          <option value="owner">owner</option>
+          <option value="viewer">{roleLabel("viewer")}</option>
+          <option value="editor">{roleLabel("editor")}</option>
+          <option value="owner">{roleLabel("owner")}</option>
         </select>
         <button type="submit" disabled={!canManageTripMembers} title="Thêm thành viên" aria-label="Thêm thành viên">
           <Plus size={18} />
@@ -2904,9 +3185,9 @@ function MemberManagerPanel({
               onChange={(event) => onRoleChange(member.id, event.target.value as ApiTripRole)}
               disabled={!canManageTripMembers || member.id === currentUserId}
             >
-              <option value="viewer">viewer</option>
-              <option value="editor">editor</option>
-              <option value="owner">owner</option>
+              <option value="viewer">{roleLabel("viewer")}</option>
+              <option value="editor">{roleLabel("editor")}</option>
+              <option value="owner">{roleLabel("owner")}</option>
             </select>
             <button
               type="button"
@@ -3295,6 +3576,11 @@ function RouteIntelligence({
                 <input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder="Điểm đến" />
                 <PlaceSuggestionList suggestions={destinationSuggestions} onSelect={onDestinationPlaceSelect} />
               </label>
+              {destination.trim() && (
+                <a className="google-map-fallback" href={googleMapsSearchUrl(destination)} target="_blank" rel="noreferrer">
+                  Không thấy điểm này? Tìm bằng Google Maps
+                </a>
+              )}
               {originCoordinate && <p className="route-gps-note">Đang dùng GPS làm điểm xuất phát.</p>}
               {recentPlaceShortcuts.length > 0 && (
                 <div className="route-place-shortcuts" aria-label="Địa điểm đã dùng gần đây">
@@ -4556,8 +4842,16 @@ function SummaryTile({ icon, label, value }: { icon: React.ReactNode; label: str
   );
 }
 
-function Avatar({ member }: { member: Member }) {
-  return <span className="avatar">{member.initials}</span>;
+function Avatar({ member }: { member: Member | TripMemberView }) {
+  const avatarColor = "avatarColor" in member ? member.avatarColor : "teal";
+  const statusEmoji = "statusEmoji" in member ? member.statusEmoji : "";
+
+  return (
+    <span className={`avatar avatar-${avatarColor}`}>
+      {statusEmoji ? <em>{statusEmoji}</em> : null}
+      <strong>{member.initials}</strong>
+    </span>
+  );
 }
 
 function modeLabel(mode: SplitMode): string {
@@ -4662,6 +4956,18 @@ function navTabLabel(tab: MobileTab): string {
   return "Bản đồ";
 }
 
+function roleLabel(role: ApiTripRole): string {
+  if (role === "owner") {
+    return "Chủ phòng";
+  }
+
+  if (role === "editor") {
+    return "Thành viên";
+  }
+
+  return "Chỉ xem";
+}
+
 function appNavRailClass(isOpen: boolean, isMinimized: boolean, side: "left" | "right"): string {
   return [
     "app-nav-rail",
@@ -4709,6 +5015,8 @@ function participantCount(expense: ApiExpense): number {
 }
 
 function mapTripMember(member: ApiTripMember): TripMemberView {
+  const travelStatus = member.travelStatus ?? "riding";
+
   return {
     id: member.userId,
     name: member.displayName,
@@ -4716,7 +5024,47 @@ function mapTripMember(member: ApiTripMember): TripMemberView {
     role: member.role,
     active: member.active !== false,
     removedAt: member.removedAt ?? null,
+    phoneNumber: member.phoneNumber ?? null,
+    homeBase: member.homeBase ?? null,
+    travelStatus,
+    statusEmoji: member.statusEmoji || travelStatusEmoji(travelStatus),
+    avatarColor: member.avatarColor ?? "teal",
+    backgroundKey: member.backgroundKey ?? "forest",
   };
+}
+
+function memberToProfileDraft(member: TripMemberView): MemberProfileDraft {
+  return {
+    displayName: member.name,
+    phoneNumber: member.phoneNumber ?? "",
+    homeBase: member.homeBase ?? "",
+    travelStatus: member.travelStatus,
+    statusEmoji: member.statusEmoji || travelStatusEmoji(member.travelStatus),
+    avatarColor: member.avatarColor,
+    backgroundKey: member.backgroundKey,
+  };
+}
+
+function travelStatusLabel(status: ApiTripMemberTravelStatus): string {
+  return travelStatusOptions.find((option) => option.id === status)?.label ?? "Đang chạy";
+}
+
+function travelStatusEmoji(status: ApiTripMemberTravelStatus): string {
+  return travelStatusOptions.find((option) => option.id === status)?.emoji ?? "🛵";
+}
+
+function safeTelHref(value: string | null | undefined): string | null {
+  const normalized = (value ?? "").replace(/[^\d+]/g, "");
+
+  if (normalized.replace(/\D/g, "").length < 6) {
+    return null;
+  }
+
+  return `tel:${normalized}`;
+}
+
+function googleMapsSearchUrl(query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim())}`;
 }
 
 function createInitials(name: string): string {

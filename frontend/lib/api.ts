@@ -37,6 +37,9 @@ export type ApiParticipant = {
 
 export type ApiTripRole = "owner" | "editor" | "viewer";
 export type ApiTripStatus = "active" | "completed" | "archived";
+export type ApiTripMemberTravelStatus = "riding" | "resting" | "need-help" | "offline";
+export type ApiTripMemberAvatarColor = "teal" | "sky" | "green" | "amber" | "rose" | "violet";
+export type ApiTripMemberBackgroundKey = "forest" | "coast" | "mountain" | "night" | "sunrise";
 
 export type ApiTripMember = {
   userId: string;
@@ -44,6 +47,12 @@ export type ApiTripMember = {
   role: ApiTripRole;
   active: boolean;
   removedAt: string | null;
+  phoneNumber?: string | null;
+  homeBase?: string | null;
+  travelStatus?: ApiTripMemberTravelStatus;
+  statusEmoji?: string;
+  avatarColor?: ApiTripMemberAvatarColor;
+  backgroundKey?: ApiTripMemberBackgroundKey;
 };
 
 export type ApiTrip = {
@@ -618,7 +627,20 @@ export async function addTripMember(payload: { displayName?: string; email?: str
   return data.member;
 }
 
-export async function updateTripMember(memberId: string, payload: { displayName?: string; role?: ApiTripRole }, targetTripId = defaultTripId): Promise<ApiTripMember> {
+export async function updateTripMember(
+  memberId: string,
+  payload: {
+    displayName?: string;
+    role?: ApiTripRole;
+    phoneNumber?: string | null;
+    homeBase?: string | null;
+    travelStatus?: ApiTripMemberTravelStatus;
+    statusEmoji?: string;
+    avatarColor?: ApiTripMemberAvatarColor;
+    backgroundKey?: ApiTripMemberBackgroundKey;
+  },
+  targetTripId = defaultTripId,
+): Promise<ApiTripMember> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/members/${memberId}`, {
     method: "PATCH",
     headers: {

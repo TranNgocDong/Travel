@@ -8,12 +8,23 @@ export interface TripMember {
   role: TripRole;
   active: boolean;
   removedAt: string | null;
+  phoneNumber?: string | null | undefined;
+  homeBase?: string | null | undefined;
+  travelStatus?: TripMemberTravelStatus | undefined;
+  statusEmoji?: string | undefined;
+  avatarColor?: TripMemberAvatarColor | undefined;
+  backgroundKey?: TripMemberBackgroundKey | undefined;
 }
+
+export type TripMemberTravelStatus = "riding" | "resting" | "need-help" | "offline";
+export type TripMemberAvatarColor = "teal" | "sky" | "green" | "amber" | "rose" | "violet";
+export type TripMemberBackgroundKey = "forest" | "coast" | "mountain" | "night" | "sunrise";
+export type TripMemberPatch = Partial<Pick<TripMember, "displayName" | "role" | "phoneNumber" | "homeBase" | "travelStatus" | "statusEmoji" | "avatarColor" | "backgroundKey">>;
 
 export interface TripMemberRepository {
   listByTrip(tripId: string): Promise<TripMember[]>;
   add(tripId: string, member: TripMember): Promise<TripMember>;
-  update(tripId: string, userId: string, patch: { displayName?: string; role?: TripRole }): Promise<TripMember | null>;
+  update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null>;
   remove(tripId: string, userId: string): Promise<void>;
 }
 
@@ -36,7 +47,13 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
         throw new Error("DUPLICATE_MEMBER");
       }
 
-      const reactivated = {
+      const reactivated: TripMember = {
+        phoneNumber: null,
+        homeBase: null,
+        travelStatus: "riding",
+        statusEmoji: "🛵",
+        avatarColor: "teal",
+        backgroundKey: "forest",
         ...member,
         active: true,
         removedAt: null,
@@ -46,7 +63,13 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
       return reactivated;
     }
 
-    const activeMember = {
+    const activeMember: TripMember = {
+      phoneNumber: null,
+      homeBase: null,
+      travelStatus: "riding",
+      statusEmoji: "🛵",
+      avatarColor: "teal",
+      backgroundKey: "forest",
       ...member,
       active: true,
       removedAt: null,
@@ -55,7 +78,7 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
     return activeMember;
   }
 
-  async update(tripId: string, userId: string, patch: { displayName?: string; role?: TripRole }): Promise<TripMember | null> {
+  async update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null> {
     const current = this.membersByTrip.get(tripId) ?? [];
     const index = current.findIndex((member) => member.userId === userId);
 
@@ -68,6 +91,12 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
       ...existing,
       displayName: patch.displayName ?? existing.displayName,
       role: patch.role ?? existing.role,
+      phoneNumber: patch.phoneNumber === undefined ? existing.phoneNumber : patch.phoneNumber,
+      homeBase: patch.homeBase === undefined ? existing.homeBase : patch.homeBase,
+      travelStatus: patch.travelStatus ?? existing.travelStatus,
+      statusEmoji: patch.statusEmoji ?? existing.statusEmoji,
+      avatarColor: patch.avatarColor ?? existing.avatarColor,
+      backgroundKey: patch.backgroundKey ?? existing.backgroundKey,
     };
 
     current[index] = next;
@@ -88,7 +117,7 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
   async listByTrip(tripId: string): Promise<TripMember[]> {
     const result = await this.pool.query<MemberRow>(
       `
-        SELECT user_id, display_name, role, removed_at
+        SELECT user_id, display_name, role, removed_at, phone_number, home_base, travel_status, status_emoji, avatar_color, background_key
         FROM trip_participants
         WHERE trip_id = $1
         ORDER BY removed_at ASC NULLS FIRST, created_at ASC, display_name ASC
@@ -108,7 +137,7 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
         SET display_name = EXCLUDED.display_name,
             role = EXCLUDED.role,
             removed_at = NULL
-        RETURNING user_id, display_name, role, removed_at
+        RETURNING user_id, display_name, role, removed_at, phone_number, home_base, travel_status, status_emoji, avatar_color, background_key
       `,
       [tripId, member.userId, member.displayName, member.role],
     );
@@ -116,16 +145,35 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
     return rowToMember(result.rows[0]!);
   }
 
-  async update(tripId: string, userId: string, patch: { displayName?: string; role?: TripRole }): Promise<TripMember | null> {
+  async update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null> {
     const result = await this.pool.query<MemberRow>(
       `
         UPDATE trip_participants
         SET display_name = COALESCE($3, display_name),
-            role = COALESCE($4, role)
+            role = COALESCE($4, role),
+            phone_number = CASE WHEN $5 THEN $6 ELSE phone_number END,
+            home_base = CASE WHEN $7 THEN $8 ELSE home_base END,
+            travel_status = COALESCE($9, travel_status),
+            status_emoji = COALESCE($10, status_emoji),
+            avatar_color = COALESCE($11, avatar_color),
+            background_key = COALESCE($12, background_key)
         WHERE trip_id = $1 AND user_id = $2
-        RETURNING user_id, display_name, role, removed_at
+        RETURNING user_id, display_name, role, removed_at, phone_number, home_base, travel_status, status_emoji, avatar_color, background_key
       `,
-      [tripId, userId, patch.displayName ?? null, patch.role ?? null],
+      [
+        tripId,
+        userId,
+        patch.displayName ?? null,
+        patch.role ?? null,
+        patch.phoneNumber !== undefined,
+        patch.phoneNumber ?? null,
+        patch.homeBase !== undefined,
+        patch.homeBase ?? null,
+        patch.travelStatus ?? null,
+        patch.statusEmoji ?? null,
+        patch.avatarColor ?? null,
+        patch.backgroundKey ?? null,
+      ],
     );
 
     return result.rows[0] ? rowToMember(result.rows[0]) : null;
@@ -141,6 +189,12 @@ interface MemberRow {
   display_name: string;
   role: string;
   removed_at: Date | string | null;
+  phone_number: string | null;
+  home_base: string | null;
+  travel_status: string | null;
+  status_emoji: string | null;
+  avatar_color: string | null;
+  background_key: string | null;
 }
 
 function rowToMember(row: MemberRow): TripMember {
@@ -150,5 +204,23 @@ function rowToMember(row: MemberRow): TripMember {
     role: row.role === "owner" || row.role === "viewer" ? row.role : "editor",
     active: row.removed_at === null,
     removedAt: row.removed_at instanceof Date ? row.removed_at.toISOString() : row.removed_at ? new Date(row.removed_at).toISOString() : null,
+    phoneNumber: row.phone_number,
+    homeBase: row.home_base,
+    travelStatus: parseTravelStatus(row.travel_status),
+    statusEmoji: row.status_emoji || "🛵",
+    avatarColor: parseAvatarColor(row.avatar_color),
+    backgroundKey: parseBackgroundKey(row.background_key),
   };
+}
+
+function parseTravelStatus(value: string | null): TripMemberTravelStatus {
+  return value === "resting" || value === "need-help" || value === "offline" ? value : "riding";
+}
+
+function parseAvatarColor(value: string | null): TripMemberAvatarColor {
+  return value === "sky" || value === "green" || value === "amber" || value === "rose" || value === "violet" ? value : "teal";
+}
+
+function parseBackgroundKey(value: string | null): TripMemberBackgroundKey {
+  return value === "coast" || value === "mountain" || value === "night" || value === "sunrise" ? value : "forest";
 }

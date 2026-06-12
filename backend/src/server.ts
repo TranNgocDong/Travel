@@ -36,7 +36,11 @@ import {
   InMemoryTripMemberRepository,
   PostgresTripMemberRepository,
   type TripMember,
+  type TripMemberAvatarColor,
+  type TripMemberBackgroundKey,
+  type TripMemberPatch,
   type TripMemberRepository,
+  type TripMemberTravelStatus,
 } from "./trips/tripMemberRepository.js";
 
 const databaseUrl = getDatabaseUrl();
@@ -168,6 +172,7 @@ app.post("/api/v1/trips", async (request, reply) => {
     role: "owner",
     active: true,
     removedAt: null,
+    ...defaultMemberProfile(),
   });
   await tripRepository.linkUser(trip.id, user.id, "owner");
   await recordAuditEvent({
@@ -930,6 +935,7 @@ app.post("/api/v1/trips/:tripId/members", async (request, reply) => {
     role: parsed.role ?? "viewer",
     active: true,
     removedAt: null,
+    ...defaultMemberProfile(),
   };
 
   try {
@@ -974,8 +980,19 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
 
   const user = await requireAuth(request, reply);
 
-  if (!user || !(await requireTripRole(reply, tripId, user.id, "manage"))) {
+  if (!user) {
     return;
+  }
+
+  const requesterRole = await tripAccess.getRole(tripId, user.id);
+  const canManage = canManageMembers(requesterRole);
+  const isSelfUpdate = memberId === user.id;
+
+  if (!requesterRole || (!canManage && !isSelfUpdate)) {
+    return reply.status(403).send({
+      error: "FORBIDDEN",
+      message: "You do not have access to update this member",
+    });
   }
 
   const parsed = parseMemberPatchBody(request.body);
@@ -994,6 +1011,13 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
     });
   }
 
+  if (!canManage && parsed.patch.role) {
+    return reply.status(403).send({
+      error: "ROLE_UPDATE_FORBIDDEN",
+      message: "Only the room owner can change member roles",
+    });
+  }
+
   const updated = await memberRepository.update(tripId, memberId, parsed.patch);
 
   if (!updated) {
@@ -1005,15 +1029,18 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
 
   await tripRepository.linkUser(tripId, updated.userId, updated.role);
   publishTripChange(tripId, user.id, "member_changed");
-  await recordAuditEvent({
-    tripId,
-    actor: user,
-    action: "member_role_changed",
-    targetUserId: updated.userId,
-    metadata: {
-      role: updated.role,
-    },
-  });
+
+  if (parsed.patch.role) {
+    await recordAuditEvent({
+      tripId,
+      actor: user,
+      action: "member_role_changed",
+      targetUserId: updated.userId,
+      metadata: {
+        role: updated.role,
+      },
+    });
+  }
 
   return {
     member: updated,
@@ -1784,10 +1811,7 @@ function parseMemberBody(body: unknown):
 function parseMemberPatchBody(body: unknown):
   | {
       ok: true;
-      patch: {
-        displayName?: string;
-        role?: TripRole;
-      };
+      patch: TripMemberPatch;
     }
   | {
       ok: false;
@@ -1800,16 +1824,54 @@ function parseMemberPatchBody(body: unknown):
   const input = body as Record<string, unknown>;
   const displayName = input.displayName === undefined ? undefined : parseString(input.displayName);
   const role = input.role === undefined ? undefined : parseRole(input.role);
+  const phoneNumber = input.phoneNumber === undefined ? undefined : parseProfileText(input.phoneNumber, 24);
+  const homeBase = input.homeBase === undefined ? undefined : parseProfileText(input.homeBase, 80);
+  const travelStatus = input.travelStatus === undefined ? undefined : parseTripMemberTravelStatus(input.travelStatus);
+  const statusEmoji = input.statusEmoji === undefined ? undefined : parseStatusEmoji(input.statusEmoji);
+  const avatarColor = input.avatarColor === undefined ? undefined : parseTripMemberAvatarColor(input.avatarColor);
+  const backgroundKey = input.backgroundKey === undefined ? undefined : parseTripMemberBackgroundKey(input.backgroundKey);
 
   if (input.displayName !== undefined && (!displayName || displayName.length > 80)) {
     return { ok: false, message: "Display name must be shorter than 80 characters" };
+  }
+
+  if (phoneNumber === undefined && input.phoneNumber !== undefined) {
+    return { ok: false, message: "Phone number is too long" };
+  }
+
+  if (homeBase === undefined && input.homeBase !== undefined) {
+    return { ok: false, message: "Home base is too long" };
   }
 
   if (input.role !== undefined && !role) {
     return { ok: false, message: "Role must be owner, editor, or viewer" };
   }
 
-  if (!displayName && !role) {
+  if (input.travelStatus !== undefined && !travelStatus) {
+    return { ok: false, message: "Travel status is not supported" };
+  }
+
+  if (input.statusEmoji !== undefined && !statusEmoji) {
+    return { ok: false, message: "Status emoji must be 1 or 2 visible characters" };
+  }
+
+  if (input.avatarColor !== undefined && !avatarColor) {
+    return { ok: false, message: "Avatar color is not supported" };
+  }
+
+  if (input.backgroundKey !== undefined && !backgroundKey) {
+    return { ok: false, message: "Background preset is not supported" };
+  }
+
+  const hasProfilePatch =
+    input.phoneNumber !== undefined ||
+    input.homeBase !== undefined ||
+    Boolean(travelStatus) ||
+    Boolean(statusEmoji) ||
+    Boolean(avatarColor) ||
+    Boolean(backgroundKey);
+
+  if (!displayName && !role && !hasProfilePatch) {
     return { ok: false, message: "Nothing to update" };
   }
 
@@ -1818,12 +1880,61 @@ function parseMemberPatchBody(body: unknown):
     patch: {
       ...(displayName ? { displayName } : {}),
       ...(role ? { role } : {}),
+      ...(input.phoneNumber !== undefined ? { phoneNumber: phoneNumber ?? null } : {}),
+      ...(input.homeBase !== undefined ? { homeBase: homeBase ?? null } : {}),
+      ...(travelStatus ? { travelStatus } : {}),
+      ...(statusEmoji ? { statusEmoji } : {}),
+      ...(avatarColor ? { avatarColor } : {}),
+      ...(backgroundKey ? { backgroundKey } : {}),
     },
   };
 }
 
 function parseRole(value: unknown): TripRole | null {
   return value === "owner" || value === "editor" || value === "viewer" ? value : null;
+}
+
+function defaultMemberProfile(): Pick<TripMember, "phoneNumber" | "homeBase" | "travelStatus" | "statusEmoji" | "avatarColor" | "backgroundKey"> {
+  return {
+    phoneNumber: null,
+    homeBase: null,
+    travelStatus: "riding",
+    statusEmoji: "🛵",
+    avatarColor: "teal",
+    backgroundKey: "forest",
+  };
+}
+
+function parseProfileText(value: unknown, maxLength: number): string | null | undefined {
+  const parsed = parseString(value);
+
+  if (!parsed) {
+    return null;
+  }
+
+  return parsed.length <= maxLength ? parsed : undefined;
+}
+
+function parseTripMemberTravelStatus(value: unknown): TripMemberTravelStatus | null {
+  return value === "riding" || value === "resting" || value === "need-help" || value === "offline" ? value : null;
+}
+
+function parseTripMemberAvatarColor(value: unknown): TripMemberAvatarColor | null {
+  return value === "teal" || value === "sky" || value === "green" || value === "amber" || value === "rose" || value === "violet" ? value : null;
+}
+
+function parseTripMemberBackgroundKey(value: unknown): TripMemberBackgroundKey | null {
+  return value === "forest" || value === "coast" || value === "mountain" || value === "night" || value === "sunrise" ? value : null;
+}
+
+function parseStatusEmoji(value: unknown): string | null {
+  const parsed = parseString(value);
+
+  if (!parsed) {
+    return null;
+  }
+
+  return [...parsed].length <= 2 ? parsed : null;
 }
 
 function parseTripStatus(value: unknown): TripStatus | null {
