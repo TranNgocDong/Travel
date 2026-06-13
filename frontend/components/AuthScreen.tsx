@@ -16,6 +16,8 @@ type AuthScreenProps = {
 };
 
 function getLoginErrorMessage(error: unknown, mode: AuthMode): string {
+  // Convert Firebase/backend errors into messages that a non-technical user can act on.
+  // The original error details are not shown because they can be noisy or leak implementation details.
   const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
   const message = error instanceof Error ? error.message : "";
 
@@ -73,6 +75,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   const lockSecondsLeft = lockUntil ? Math.max(0, Math.ceil((lockUntil - now) / 1000)) : 0;
 
   useEffect(() => {
+    // The countdown only runs while locked, keeping idle auth screens cheap.
     if (!isLocked) {
       return;
     }
@@ -88,6 +91,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   }
 
   function registerFailedAttempt() {
+    // Client-side brute-force friction for UX feedback.
+    // Real production protection still belongs on Firebase/Auth provider and backend rate limits.
     const nextCount = failedAttempts + 1;
     setFailedAttempts(nextCount);
 
@@ -110,6 +115,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    // Lockout is checked before validation to avoid giving attackers repeated feedback
+    // while the form is temporarily blocked.
     if (isLocked) {
       setAuthError(`Tài khoản đang bị khóa tạm thời. Thử lại sau ${lockSecondsLeft} giây.`);
       return;
@@ -164,6 +171,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
           : await login(safeEmail.ok ? safeEmail.value : "", password, rememberMe);
 
       resetFailedAttempts();
+      // This flag controls whether the app may skip the landing/login screen next time.
+      // Firebase persistence still controls whether a valid session exists.
       setAutoEnterApp(rememberMe);
       onAuthenticated(user);
     } catch (error) {
@@ -175,6 +184,8 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
   }
 
   async function handleSocialLogin(provider: "google" | "apple") {
+    // Social login follows the same local anti-abuse UI gates as email/password.
+    // Firebase still performs the real OAuth flow and token issuance.
     if (isLocked) {
       setAuthError(`Đang khóa tạm thời. Thử lại sau ${lockSecondsLeft} giây.`);
       return;
@@ -191,6 +202,7 @@ export function AuthScreen({ theme, onAuthenticated, onThemeToggle }: AuthScreen
     try {
       const user = provider === "google" ? await loginWithGoogle(rememberMe) : await loginWithApple(rememberMe);
       resetFailedAttempts();
+      // Keep the user's preference consistent no matter which login method succeeded.
       setAutoEnterApp(rememberMe);
       onAuthenticated(user);
     } catch {

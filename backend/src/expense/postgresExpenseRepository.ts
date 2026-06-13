@@ -32,6 +32,8 @@ export class PostgresExpenseRepository implements ExpenseRepository {
   }
 
   async add(tripId: string, expense: StoredExpense): Promise<StoredExpense> {
+    // Expense ids are clientMutationIds when the browser retries offline expenses.
+    // ON CONFLICT makes repeated submissions idempotent for the same trip, but rejects the same id on another trip.
     const result = await this.pool.query<ExpenseRow>(
       `
         INSERT INTO expenses (id, trip_id, title, category, paid_by_user_id, amount, currency_code, split, created_at)
@@ -56,6 +58,7 @@ export class PostgresExpenseRepository implements ExpenseRepository {
     const row = result.rows[0];
 
     if (!row) {
+      // The id already exists for a different trip, so treating it as a duplicate avoids cross-trip data leaks.
       throw new DuplicateExpenseIdError();
     }
 
@@ -64,6 +67,8 @@ export class PostgresExpenseRepository implements ExpenseRepository {
 }
 
 function rowToExpense(row: ExpenseRow): StoredExpense {
+  // Convert database column names and numeric strings into the API shape expected by the frontend.
+  // Amount stays a string to avoid floating-point rounding issues in money calculations.
   return {
     id: row.id,
     title: row.title,

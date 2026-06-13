@@ -22,6 +22,8 @@ export type TripMemberBackgroundKey = "forest" | "coast" | "mountain" | "night" 
 export type TripMemberPatch = Partial<Pick<TripMember, "displayName" | "role" | "phoneNumber" | "homeBase" | "travelStatus" | "statusEmoji" | "avatarColor" | "backgroundKey">>;
 
 export interface TripMemberRepository {
+  // Members are soft-deleted rather than physically removed.
+  // This keeps historical expenses, audit events, and trip recaps readable after someone leaves a room.
   listByTrip(tripId: string): Promise<TripMember[]>;
   add(tripId: string, member: TripMember): Promise<TripMember>;
   update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null>;
@@ -47,6 +49,8 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
         throw new Error("DUPLICATE_MEMBER");
       }
 
+      // Re-adding a previously removed user reactivates the old membership row.
+      // This mirrors the Postgres ON CONFLICT behavior and avoids duplicate member identities.
       const reactivated: TripMember = {
         phoneNumber: null,
         homeBase: null,
@@ -107,6 +111,7 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
   async remove(tripId: string, userId: string): Promise<void> {
     const current = this.membersByTrip.get(tripId) ?? [];
     const now = new Date().toISOString();
+    // Soft remove keeps the member in history while hiding them from active trip actions.
     this.membersByTrip.set(tripId, current.map((member) => (member.userId === userId ? { ...member, active: false, removedAt: now } : member)));
   }
 }
@@ -146,6 +151,8 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
   }
 
   async update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null> {
+    // CASE WHEN flags let the API intentionally set nullable fields to null.
+    // COALESCE alone would make "clear phone/home base" impossible because null would mean "do not update".
     const result = await this.pool.query<MemberRow>(
       `
         UPDATE trip_participants
@@ -180,6 +187,7 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
   }
 
   async remove(tripId: string, userId: string): Promise<void> {
+    // Keep the row for recap/audit/history, but mark it inactive for current room operations.
     await this.pool.query("UPDATE trip_participants SET removed_at = now() WHERE trip_id = $1 AND user_id = $2", [tripId, userId]);
   }
 }
@@ -198,6 +206,8 @@ interface MemberRow {
 }
 
 function rowToMember(row: MemberRow): TripMember {
+  // Normalize database rows into safe application values.
+  // Unknown enum strings fall back to conservative defaults so bad data does not crash the UI.
   return {
     userId: row.user_id,
     displayName: row.display_name,

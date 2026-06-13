@@ -95,6 +95,8 @@ export function calculateSplitBill(input: {
   fxRates: FxRate[];
   expenses: ExpenseInput[];
 }): SplitBillResult {
+  // Money is calculated in minor units with bigint, never with floating-point numbers.
+  // This avoids rounding bugs such as 0.1 + 0.2 and keeps split-bill results exact.
   const participantIds = new Set(input.participants.map((participant) => participant.id));
   const currencyByCode = new Map(input.currencies.map((currency) => [currency.code, currency]));
   const balances = new Map<UserId, bigint>();
@@ -109,6 +111,8 @@ export function calculateSplitBill(input: {
   for (const expense of input.expenses) {
     assertKnownUser(participantIds, expense.paidByUserId, `Unknown payer "${expense.paidByUserId}"`);
 
+    // Convert every expense into the trip currency before changing balances.
+    // This keeps settlements simple even when the group records VND, USD, CNY, etc.
     const totalMinor = convertToMinorUnits({
       money: expense.money,
       targetCurrency: input.tripCurrency,
@@ -120,6 +124,7 @@ export function calculateSplitBill(input: {
       throw new SplitBillError("INVALID_AMOUNT", `Expense "${expense.id}" must be greater than zero`);
     }
 
+    // The payer is credited first because they paid money on behalf of the group.
     balances.set(expense.paidByUserId, mustGetBalance(balances, expense.paidByUserId) + totalMinor);
 
     const owedAmounts = calculateOwedAmounts({
@@ -132,6 +137,7 @@ export function calculateSplitBill(input: {
     });
 
     for (const owed of owedAmounts) {
+      // Each participant is debited by the portion they owe.
       balances.set(owed.userId, mustGetBalance(balances, owed.userId) - owed.amountMinor);
     }
   }
@@ -158,6 +164,8 @@ function calculateOwedAmounts(input: {
   currencies: Map<CurrencyCode, CurrencyDefinition>;
   fxRates: FxRate[];
 }): Array<{ userId: UserId; amountMinor: bigint }> {
+  // Split modes are normalized into the same output shape:
+  // a list of user ids and exact minor-unit amounts owed for this expense.
   switch (input.split.type) {
     case "equal": {
       assertNonEmpty(input.split.userIds, "Equal split must include at least one user");
@@ -243,6 +251,8 @@ function allocateByWeights(totalMinor: bigint, allocations: AllocationInput[]): 
     throw new SplitBillError("INVALID_SPLIT_WEIGHT", "Split weight total must be greater than zero");
   }
 
+  // First divide by weight using integer division.
+  // Remainders are tracked so leftover cents can be assigned deterministically.
   const provisional = allocations.map((allocation) => {
     const numerator = totalMinor * allocation.weight;
     return {
@@ -261,6 +271,8 @@ function allocateByWeights(totalMinor: bigint, allocations: AllocationInput[]): 
     return left.remainder > right.remainder ? -1 : 1;
   });
 
+  // Distribute any missing minor units to the largest remainders.
+  // userId tie-breakers make the result stable across runs.
   for (const item of remainderOrder) {
     if (missingMinor === 0n) {
       break;
@@ -276,6 +288,8 @@ function allocateByWeights(totalMinor: bigint, allocations: AllocationInput[]): 
 }
 
 function minimizeSettlements(balances: Array<[UserId, bigint]>, currency: CurrencyCode): Settlement[] {
+  // Positive balances are people who should receive money.
+  // Negative balances are people who should pay money.
   const creditors = balances
     .filter(([, balance]) => balance > 0n)
     .map(([userId, balance]) => ({ userId, amountMinor: balance }))
@@ -290,6 +304,8 @@ function minimizeSettlements(balances: Array<[UserId, bigint]>, currency: Curren
   let debtorIndex = 0;
   let creditorIndex = 0;
 
+  // Greedy matching minimizes the number of payments enough for group trips:
+  // the largest debtor pays the largest creditor until one side is settled.
   while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
     const debtor = debtors[debtorIndex];
     const creditor = creditors[creditorIndex];
@@ -338,6 +354,8 @@ function convertToMinorUnits(input: {
     return decimalToMinorUnits(moneyDecimal, targetCurrency.minorUnit);
   }
 
+  // FX conversion is performed with rational decimal pieces, then rounded half-up
+  // once at the final target minor unit.
   const fxRate = findFxRate(input.fxRates, sourceCurrency.code, targetCurrency.code);
   const rateDecimal = parseDecimal(fxRate.rate, 12, "FX rate");
   const numerator = moneyDecimal.numerator * rateDecimal.numerator * 10n ** BigInt(targetCurrency.minorUnit);
@@ -352,6 +370,8 @@ function decimalToMinorUnits(decimal: ParsedDecimal, minorUnit: number): bigint 
 }
 
 function parseDecimal(value: string, maxFractionDigits: number, label: string): ParsedDecimal {
+  // Strict decimal parsing avoids accepting scientific notation, negative values, or locale commas.
+  // That makes money validation predictable across browsers and regions.
   if (!/^(0|[1-9]\d*)(\.\d+)?$/.test(value)) {
     throw new SplitBillError("INVALID_DECIMAL", `Invalid ${label}: "${value}"`);
   }

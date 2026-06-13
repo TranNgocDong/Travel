@@ -426,11 +426,21 @@ function memberRouteColor(seed: string): string {
 }
 
 export function ExpensePlanner() {
+  // Main screen after authentication.
+  // This component currently coordinates four product areas:
+  // 1. Map, route planning, and member GPS.
+  // 2. Expenses and split-bill.
+  // 3. Group presence and chat.
+  // 4. Trip recap, archive, and delete.
+  // The state groups below follow those product areas so future refactors can split them safely.
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [activeTab, setActiveTab] = useState<MobileTab>("route");
   const [isAppRailOpen, setIsAppRailOpen] = useState(false);
   const [isAppRailMinimized, setIsAppRailMinimized] = useState(false);
   const [appRailSide, setAppRailSide] = useState<"left" | "right">("left");
+
+  // Core trip data comes from the backend/Postgres.
+  // Live sync refreshes these sections selectively so map interactions are not reset unnecessarily.
   const [expenses, setExpenses] = useState<ApiExpense[]>([]);
   const [members, setMembers] = useState<TripMemberView[]>([]);
   const [trips, setTrips] = useState<ApiTrip[]>([]);
@@ -442,6 +452,9 @@ export function ExpensePlanner() {
   const [visibleMemberRouteIds, setVisibleMemberRouteIds] = useState<string[]>([]);
   const [tripPois, setTripPois] = useState<ApiTripPoi[]>([]);
   const [selectedPoiKinds, setSelectedPoiKinds] = useState<ApiTripPoiKind[]>(["food", "lodging", "fuel"]);
+
+  // memberLocations stores the latest GPS point for each sharing member.
+  // presenceUsers only describes who is online/sharing; it does not replace location data.
   const [memberLocations, setMemberLocations] = useState<ApiMemberLocation[]>([]);
   const [presenceUsers, setPresenceUsers] = useState<ApiPresenceUser[]>([]);
   const [presenceNotice, setPresenceNotice] = useState<PresenceNotice | null>(null);
@@ -455,6 +468,9 @@ export function ExpensePlanner() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  // Route endpoints can be plain text or exact coordinates selected from saved places, POIs, or GPS.
+  // The backend prefers coordinates because they are more reliable than free-form place names.
   const [routePlan, setRoutePlan] = useState<ApiRoutePlan | null>(null);
   const [routeOrigin, setRouteOrigin] = useState("");
   const [routeOriginCoordinate, setRouteOriginCoordinate] = useState<ApiGeoPoint | null>(null);
@@ -469,6 +485,9 @@ export function ExpensePlanner() {
   const [isSavingMemberRoute, setIsSavingMemberRoute] = useState(false);
   const [deletingMemberRouteId, setDeletingMemberRouteId] = useState<string | null>(null);
   const [deletingMapMarkerId, setDeletingMapMarkerId] = useState<string | null>(null);
+
+  // Expense form state. The client builds a split payload for UX,
+  // but the backend validates and calculates the split again instead of trusting the browser.
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode>("VND");
@@ -478,6 +497,10 @@ export function ExpensePlanner() {
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [splitValues, setSplitValues] = useState<Record<string, string>>({});
   const [showExpenseAdvanced, setShowExpenseAdvanced] = useState(false);
+
+  // Offline queue lets users save expenses while the network is down.
+  // When the browser comes back online, syncQueuedExpenses sends each item with a clientMutationId
+  // so the backend can avoid duplicate writes.
   const [offlineReady, setOfflineReady] = useState(false);
   const [isUsingOfflineRoute, setIsUsingOfflineRoute] = useState(false);
   const [queuedExpenseCount, setQueuedExpenseCount] = useState(0);
@@ -505,6 +528,11 @@ export function ExpensePlanner() {
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberEmail, setNewMemberEmail] = useState("");
   const [newMemberRole, setNewMemberRole] = useState<ApiTripRole>("viewer");
+
+  // Refs hold technical flags that should not trigger re-renders:
+  // - prevent overlapping loadTripData calls.
+  // - detect whether the route form is dirty so background refreshes do not overwrite user input.
+  // - keep the geolocation watch id so GPS sharing can be stopped cleanly.
   const loadTripDataInFlightRef = useRef(false);
   const routeFormDirtyRef = useRef(false);
   const routePlanSignatureRef = useRef("");
@@ -513,6 +541,11 @@ export function ExpensePlanner() {
   const chatMessageListRef = useRef<HTMLDivElement | null>(null);
 
   const placeSuggestions = useMemo(() => {
+    // Place suggestions are merged from three sources:
+    // - recent user searches.
+    // - saved map markers.
+    // - route POIs such as food, lodging, and fuel.
+    // A Map removes duplicates before the list is displayed.
     const byId = new globalThis.Map<string, SavedPlace>();
 
     for (const place of savedPlaces) {
@@ -541,6 +574,8 @@ export function ExpensePlanner() {
   }, []);
 
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
+    // A route plan update must keep the map, route form, cache, and offline status in sync.
+    // routePlanSignatureRef prevents background refreshes from re-applying the same route and causing map jitter.
     const safeRoutePlan = normalizeRoutePlan(nextRoutePlan);
 
     routePlanSignatureRef.current = routePlanSignature(safeRoutePlan);
@@ -564,6 +599,9 @@ export function ExpensePlanner() {
   }
 
   const loadTripData = useCallback(async (options: { silent?: boolean } = {}) => {
+    // Loads the full workspace for the selected trip.
+    // silent=true is used by background refresh/live sync so the UI updates without a full-screen loading state.
+    // loadTripDataInFlightRef prevents SSE events and timers from launching overlapping API batches.
     if (loadTripDataInFlightRef.current) {
       return;
     }
@@ -770,6 +808,8 @@ export function ExpensePlanner() {
   }, [currentUser, isSyncingExpenses, loadTripData]);
 
   useEffect(() => {
+    // Initialize device-local preferences.
+    // These values do not change the online database: theme, recent places, offline expense queue, and last selected trip.
     const savedTheme = window.localStorage.getItem("trail-ledger-theme");
     const nextTheme = savedTheme === "light" ? "light" : "dark";
     setTheme(nextTheme);
@@ -785,6 +825,8 @@ export function ExpensePlanner() {
   }, []);
 
   useEffect(() => {
+    // "Remember login / auto-enter app" behavior.
+    // If the user did not enable it, the app stays on the login screen instead of jumping into the cockpit.
     let mounted = true;
 
     if (!shouldAutoEnterApp()) {
@@ -847,6 +889,8 @@ export function ExpensePlanner() {
   }, [currentUser?.id]);
 
   useEffect(() => {
+    // Background refresh runs only when the tab is visible, online, and not currently saving/planning.
+    // This keeps group data fresh without constantly resetting the map while the rider is interacting with it.
     if (!currentUser) {
       return;
     }
@@ -964,6 +1008,8 @@ export function ExpensePlanner() {
   }, [activeTrip?.id, currentUser, loadTripPois, routePlan?.generatedAt, routePlan?.totalDistanceKm, selectedPoiKinds]);
 
   useEffect(() => {
+    // New member routes are visible by default.
+    // Routes that the user manually hid stay hidden as long as the same route id still exists.
     setVisibleMemberRouteIds((current) => {
       const currentSet = new Set(current);
       const nextIds = memberRoutes.map((route) => route.id);
@@ -974,6 +1020,9 @@ export function ExpensePlanner() {
   }, [memberRoutes]);
 
   useEffect(() => {
+    // Live sync events only announce that something changed.
+    // The client then refreshes only the affected section: chat, GPS, markers, member routes, or trip data.
+    // This is lighter and smoother than reloading the whole cockpit after every event.
     if (!currentUser || !activeTrip?.id) {
       setIsLiveSyncConnected(false);
       return;
@@ -1126,6 +1175,7 @@ export function ExpensePlanner() {
     setIsChatOpen(nextOpen);
 
     if (nextOpen) {
+      // Opening chat marks messages as read and refreshes once in case the SSE stream missed an event.
       setUnreadChatCount(0);
       setChatError(null);
 
@@ -1148,6 +1198,8 @@ export function ExpensePlanner() {
       return;
     }
 
+    // The message is added to the UI only after the backend confirms it.
+    // This avoids displaying fake sent messages when auth, membership, or validation fails.
     setIsSendingMessage(true);
     setChatError(null);
 
@@ -1182,6 +1234,8 @@ export function ExpensePlanner() {
   }
 
   function clearLocationShareWatch() {
+    // watchPosition keeps running in the browser until it is explicitly cleared.
+    // Always clear it on stop/logout/unmount so the app does not keep sending GPS in the background.
     if (locationShareWatchIdRef.current !== null && "geolocation" in navigator) {
       navigator.geolocation.clearWatch(locationShareWatchIdRef.current);
     }
@@ -1213,6 +1267,8 @@ export function ExpensePlanner() {
       (position) => {
         const now = Date.now();
 
+        // Browsers can emit GPS points very frequently.
+        // Throttling to 15 seconds saves battery/API calls and prevents visible map jitter.
         if (lastSharedPositionAtRef.current && now - lastSharedPositionAtRef.current < locationShareIntervalMs) {
           return;
         }
@@ -1272,7 +1328,8 @@ export function ExpensePlanner() {
       try {
         await stopSharingMyLocation(tripIdToStop);
       } catch {
-        // The shared point expires automatically, so failing to stop it immediately is not critical.
+        // GPS points expire server-side, so a failed stop request is not dangerous.
+        // The UI still stops immediately so the user is not stuck in a sharing state.
       }
     }
   }
@@ -1301,6 +1358,8 @@ export function ExpensePlanner() {
     setApiError(null);
 
     const clientMutationId = createClientMutationId();
+    // clientMutationId is an idempotency key.
+    // If the user goes offline and the app retries later, the backend can detect duplicate submissions.
     const expensePayload: ApiCreateExpensePayload = {
       title: title.trim(),
       category,
@@ -1320,6 +1379,8 @@ export function ExpensePlanner() {
       await loadTripData();
     } catch (error) {
       if (shouldQueueExpense(error)) {
+        // Queue only network/server-temporary failures.
+        // Validation or permission errors are not queued because retrying would fail again.
         const queuedExpense: OfflineExpenseQueueItem = {
           id: clientMutationId,
           tripId: selectedTripId,
@@ -1389,6 +1450,8 @@ export function ExpensePlanner() {
     setApiError(null);
 
     try {
+      // Send both the readable label and exact coordinates when coordinates are available.
+      // The backend can route by coordinates while the UI still shows a friendly place name.
       const nextRoutePlan = await planRoute({
         origin: routeOriginCoordinate ? routeOrigin.trim() || "Vị trí của bạn" : routeOrigin.trim(),
         destination: routeDestination.trim(),
@@ -1430,6 +1493,8 @@ export function ExpensePlanner() {
     setApiError(null);
 
     try {
+      // This flow uses the browser's current GPS as the route origin.
+      // Permission errors are handled separately so the user knows to enable location access.
       const position = await getCurrentBrowserPosition();
       const originCoordinate = {
         lat: position.coords.latitude,
@@ -1476,6 +1541,8 @@ export function ExpensePlanner() {
     setApiError(null);
 
     try {
+      // A member route is a personal route layer.
+      // Other trip members can see it, but they can toggle it independently on their own map.
       const memberRoute = await createMemberRoute({
         origin: routeOriginCoordinate ? routeOrigin.trim() || "Vị trí của bạn" : routeOrigin.trim(),
         destination: routeDestination.trim(),
@@ -1536,6 +1603,8 @@ export function ExpensePlanner() {
     setApiError(null);
 
     try {
+      // "Meet member" routes from my current GPS point to the member's latest shared GPS point.
+      // It does not search by the member name because names are not map addresses.
       const position = await getCurrentBrowserPosition();
       const originCoordinate = {
         lat: position.coords.latitude,
@@ -3848,6 +3917,8 @@ type RouteMapProps = {
 };
 
 function RouteMap(props: RouteMapProps) {
+  // Google Maps is used only when a public API key is configured.
+  // Otherwise the app falls back to Leaflet/OpenStreetMap so the product still works on free hosting.
   if (googleMapsApiKey) {
     return <GoogleRouteMap {...props} />;
   }
@@ -3878,6 +3949,8 @@ function GoogleRouteMap({
   const [selectedPlace, setSelectedPlace] = useState<SavedPlace | null>(null);
 
   const clearGoogleOverlays = useCallback(() => {
+    // Google Maps overlays must be detached from the map before drawing the next route.
+    // This prevents duplicate polylines/markers after a live refresh.
     for (const overlay of overlaysRef.current) {
       if ("setMap" in overlay && typeof overlay.setMap === "function") {
         overlay.setMap(null);
@@ -3896,6 +3969,8 @@ function GoogleRouteMap({
       return undefined;
     }
 
+    // Fullscreen changes alter the DOM size before Google Maps knows about it.
+    // A delayed resize keeps tiles and markers aligned after the animation finishes.
     const timer = window.setTimeout(() => {
       google.maps.event.trigger(map, "resize");
     }, 220);
@@ -3920,6 +3995,8 @@ function GoogleRouteMap({
           return;
         }
 
+        // Rebuild all Google overlays from the latest route snapshot.
+        // The map instance is recreated here because Google rendering is optional and route updates are not continuous.
         clearGoogleOverlays();
         const routePath = points.map((point) => ({ lat: point.lat, lng: point.lng }));
         const map = new googleMaps.maps.Map(mapElementRef.current, {
@@ -4203,6 +4280,8 @@ function OpenStreetRouteMap({
       return undefined;
     }
 
+    // Leaflet needs invalidateSize after fullscreen/bottom-sheet layout changes,
+    // otherwise tiles can appear cropped or controls may be placed incorrectly.
     const timer = window.setTimeout(() => {
       map.invalidateSize();
     }, 220);
@@ -4252,6 +4331,8 @@ function OpenStreetRouteMap({
     const leaflet = leafletModuleRef.current ?? (await import("leaflet"));
     leafletModuleRef.current = leaflet;
 
+    // This is the local "follow my GPS" mode for riding.
+    // It updates the blue user marker and heading arrow without sending anything to the backend.
     const latLng = leaflet.latLng(position.coords.latitude, position.coords.longitude);
     const accuracyRadius = Math.max(position.coords.accuracy, 12);
 
@@ -4331,6 +4412,8 @@ function OpenStreetRouteMap({
     setIsFollowingUser(true);
     setLocationStatus("searching");
 
+    // This watch is separate from "share my location".
+    // Following moves only the local map camera; sharing sends GPS to the trip backend.
     locationWatchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         void updateUserPosition(position);
@@ -4367,6 +4450,8 @@ function OpenStreetRouteMap({
       }
 
       leafletModuleRef.current = leaflet;
+      // Member GPS is drawn in its own layer so refreshes can replace only these pins
+      // without rebuilding the base map or the main route line.
       clearMemberLocationLayer();
 
       if (!memberLocations.length) {
@@ -4452,6 +4537,7 @@ function OpenStreetRouteMap({
       }
 
       leafletModuleRef.current = leaflet;
+      // POIs are independent from the route layer; changing filters only redraws this layer.
       clearPoiLayer();
 
       if (!pois.length) {

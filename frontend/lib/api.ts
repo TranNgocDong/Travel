@@ -20,6 +20,9 @@ import type { CurrencyCode } from "./settlements";
 export const defaultTripId = process.env.NEXT_PUBLIC_DEFAULT_TRIP_ID ?? "";
 export const tripId = defaultTripId;
 
+// This is the single API base used by the browser app.
+// Local development defaults to localhost:4000; production falls back to the Render backend.
+// On real deployments, set NEXT_PUBLIC_API_BASE_URL explicitly so the client never calls the wrong server.
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV === "production" ? "https://travel-4bm4.onrender.com/api/v1" : "http://localhost:4000/api/v1");
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
@@ -30,6 +33,9 @@ appleProvider.addScope("name");
 let currentFirebaseUser: User | null = null;
 let authReadyPromise: Promise<User | null> | null = null;
 
+// The Api* types below mirror the backend response contracts.
+// Keeping them here makes missing fields, invalid roles, unsupported currencies, and bad coordinates fail at compile time.
+// When the backend API changes, update this file in the same commit so TypeScript catches mismatches early.
 export type ApiParticipant = {
   id: string;
   displayName?: string;
@@ -287,6 +293,8 @@ export type ApiTripLiveEvent = {
 export async function getCurrentFirebaseUser(): Promise<User | null> {
   const firebaseAuth = getFirebaseAuth();
 
+  // Firebase may restore an existing session after React has already rendered once.
+  // Waiting for one onAuthStateChanged callback prevents the app from treating a valid remembered login as signed out.
   if (firebaseAuth.currentUser) {
     currentFirebaseUser = firebaseAuth.currentUser;
     return currentFirebaseUser;
@@ -694,6 +702,8 @@ export function subscribeToTripEvents(
     onError?(): void;
   },
 ): () => void {
+  // Live sync uses AbortController so old SSE connections are closed when the user switches trip,
+  // logs out, or the component unmounts. Without this, the browser can keep duplicate event streams alive.
   const controller = new AbortController();
 
   void listenToTripEvents(targetTripId, controller.signal, handlers);
@@ -706,6 +716,10 @@ export function subscribeToTripEvents(
 async function authedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const token = await getFirebaseIdToken();
 
+  // Security note:
+  // - The Firebase ID token is read in memory only when a request is sent.
+  // - We do not manually store bearer tokens in localStorage/sessionStorage, reducing XSS token theft risk.
+  // - The backend verifies this bearer token on every protected request.
   return fetch(input, {
     ...init,
     credentials: "include",
@@ -726,6 +740,8 @@ async function listenToTripEvents(
     onError?(): void;
   },
 ) {
+  // SSE is the lightweight live channel for trip changes.
+  // If the network drops or the free backend wakes slowly, the loop waits 3 seconds and reconnects automatically.
   while (!signal.aborted) {
     try {
       const token = await getFirebaseIdToken();
@@ -761,6 +777,8 @@ async function readSseStream(stream: ReadableStream<Uint8Array>, signal: AbortSi
   let buffer = "";
 
   try {
+    // SSE arrives as arbitrary byte chunks, so one read is not always one full event.
+    // The buffer keeps partial chunks until a blank line marks the end of an SSE event.
     while (!signal.aborted) {
       const { done, value } = await reader.read();
 
@@ -838,6 +856,8 @@ async function getFirebaseIdToken(): Promise<string> {
 }
 
 async function parseApiResponse<T>(response: Response): Promise<T> {
+  // The backend normally returns JSON with a message on errors.
+  // If a response is not JSON, this still throws a friendly error instead of crashing the UI.
   const data = (await response.json().catch(() => null)) as T | { message?: string } | null;
 
   if (!response.ok) {

@@ -46,10 +46,14 @@ import {
 const databaseUrl = getDatabaseUrl();
 const isProduction = process.env.NODE_ENV === "production";
 
+// Production must never start with in-memory storage.
+// In-memory repositories are convenient for local development, but they would lose trips, GPS, chat, and expenses on restart.
 if (isProduction && !databaseUrl) {
   throw new Error("DATABASE_URL is required when NODE_ENV=production. Refusing to start with in-memory local data.");
 }
 
+// Repository selection is centralized here so the rest of the server can use the same interfaces
+// whether it is backed by Postgres in production or memory during local/offline development.
 const pool = databaseUrl ? createPool() : null;
 const repository: ExpenseRepository = pool ? new PostgresExpenseRepository(pool) : new InMemoryExpenseRepository();
 const memberRepository: TripMemberRepository = pool ? new PostgresTripMemberRepository(pool) : new InMemoryTripMemberRepository();
@@ -75,12 +79,16 @@ await app.register(helmet, {
 });
 
 await app.register(cors, {
+  // CORS origins are parsed from env so production can allow only the deployed frontend domains.
+  // This is still paired with Firebase bearer token checks; CORS alone is not authentication.
   origin: parseCorsOrigins(process.env.CORS_ORIGINS),
   credentials: true,
   methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 
 await app.register(rateLimit, {
+  // Basic API-level abuse protection. Authentication-specific limits should stay stricter
+  // at Firebase/identity provider level, but this protects public HTTP resources too.
   max: 120,
   timeWindow: "1 minute",
 });
@@ -99,6 +107,8 @@ app.get("/health", async () => {
 });
 
 app.get("/ready", async (_request, reply) => {
+  // /ready checks whether the database is actually reachable.
+  // Render/Railway health checks should prefer this when a successful DB connection is required.
   if (pool) {
     try {
       await pingDatabase(pool);
@@ -166,6 +176,8 @@ app.post("/api/v1/trips", async (request, reply) => {
     currency: parsed.currency,
   });
 
+  // The creator becomes the first owner immediately.
+  // Both the member table and the trip-user link are updated so RBAC and trip lists stay consistent.
   await memberRepository.add(trip.id, {
     userId: user.id,
     displayName: user.displayName,
@@ -202,6 +214,8 @@ app.patch("/api/v1/trips/:tripId/status", async (request, reply) => {
 
   const user = await requireAuth(request, reply);
 
+  // Completing, archiving, or reopening a trip changes the shared workspace,
+  // so only managers/owners are allowed to do it.
   if (!user || !(await requireTripRole(reply, tripId, user.id, "manage"))) {
     return;
   }
@@ -791,6 +805,8 @@ app.get("/api/v1/trips/:tripId/locations", async (request, reply) => {
     return;
   }
 
+  // GPS points are short-lived. Pruning before reads prevents stale member pins
+  // from appearing as if someone is still sharing live location.
   await locationRepository.pruneExpired();
 
   return {
@@ -873,6 +889,8 @@ app.put("/api/v1/trips/:tripId/locations/me", async (request, reply) => {
     });
   }
 
+  // A member may only update their own live GPS point.
+  // The user id always comes from the verified Firebase token, never from the request body.
   const location = await locationRepository.upsert({
     tripId,
     userId: user.id,
@@ -916,6 +934,7 @@ app.post("/api/v1/trips/:tripId/members", async (request, reply) => {
 
   const user = await requireAuth(request, reply);
 
+  // Adding members is a room-management action, so it requires owner/manage access.
   if (!user || !(await requireTripRole(reply, tripId, user.id, "manage"))) {
     return;
   }
@@ -988,6 +1007,8 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
   const canManage = canManageMembers(requesterRole);
   const isSelfUpdate = memberId === user.id;
 
+  // Owners can edit any member. Regular members can only edit their own profile fields.
+  // Role changes are blocked below unless the requester has manage permission.
   if (!requesterRole || (!canManage && !isSelfUpdate)) {
     return reply.status(403).send({
       error: "FORBIDDEN",
@@ -1005,6 +1026,7 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
   }
 
   if (memberId === user.id && parsed.patch.role && parsed.patch.role !== "owner") {
+    // Prevent the last active owner from accidentally removing their own management access.
     return reply.status(400).send({
       error: "OWNER_SELF_DOWNGRADE",
       message: "Owner cannot downgrade their own role",
@@ -1012,6 +1034,7 @@ app.patch("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => {
   }
 
   if (!canManage && parsed.patch.role) {
+    // Self-service profile editing is allowed, but role escalation is never allowed from the client.
     return reply.status(403).send({
       error: "ROLE_UPDATE_FORBIDDEN",
       message: "Only the room owner can change member roles",
@@ -1065,6 +1088,7 @@ app.delete("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => 
   }
 
   if (memberId === user.id) {
+    // Owners should leave/delete/archive the trip through dedicated flows instead of removing themselves here.
     return reply.status(400).send({
       error: "OWNER_SELF_REMOVE",
       message: "You cannot remove yourself from the trip",
@@ -1083,6 +1107,7 @@ app.delete("/api/v1/trips/:tripId/members/:memberId", async (request, reply) => 
   }
 
   if (targetMember.role === "owner" && activeOwners.length <= 1) {
+    // Every active trip must keep at least one owner so the room is not orphaned.
     return reply.status(400).send({
       error: "LAST_OWNER_REMOVE",
       message: "Phòng phải còn ít nhất một chủ phòng",
@@ -1264,6 +1289,8 @@ async function recordAuditEvent(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
+    // Audit writes are best-effort: they are important for accountability,
+    // but a logging failure should not block a user's main action.
     const auditInput = {
       id: `audit_${randomUUID()}`,
       tripId: input.tripId,
@@ -1283,6 +1310,8 @@ async function recordAuditEvent(input: {
 function scrubAuditMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   const safeMetadata: Record<string, unknown> = {};
 
+  // Store only small primitive metadata values.
+  // This prevents accidental logging of large objects, tokens, documents, or sensitive profile data.
   for (const [key, value] of Object.entries(metadata)) {
     if (typeof value === "string") {
       safeMetadata[key] = value.slice(0, 160);
@@ -1300,6 +1329,8 @@ function scrubAuditMetadata(metadata: Record<string, unknown>): Record<string, u
 async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<UserAccount | null> {
   const authorization = request.headers.authorization;
 
+  // All protected API routes require a Firebase ID token in the Authorization header.
+  // The backend does not trust any user id sent from the browser body/query string.
   if (!authorization?.startsWith("Bearer ")) {
     reply.status(401).send({
       error: "MISSING_ACCESS_TOKEN",
@@ -1311,6 +1342,7 @@ async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promis
   try {
     const user = await verifyFirebaseBearerToken(authorization.slice("Bearer ".length));
 
+    // Disabled or unknown users are rejected even when the token format is valid.
     if (!user || user.status !== "active") {
       reply.status(401).send({
         error: "INVALID_USER",
@@ -1332,6 +1364,10 @@ async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promis
 async function requireTripRole(reply: FastifyReply, tripId: string, userId: string, mode: "read" | "write" | "manage"): Promise<boolean> {
   const role = await tripAccess.getRole(tripId, userId);
 
+  // Central RBAC gate:
+  // read   = can see trip data.
+  // write  = can modify trip content such as routes, markers, expenses.
+  // manage = can change members, status, or delete/archive sensitive resources.
   if (!role || (mode === "write" && !canWriteTrip(role)) || (mode === "manage" && !canManageMembers(role))) {
     reply.status(403).send({
       error: "FORBIDDEN",
@@ -1576,6 +1612,8 @@ function parseCreateExpenseBody(body: unknown):
       ok: false;
       message: string;
     } {
+  // Validate the raw request body before it reaches split-bill logic or database writes.
+  // This protects the API from malformed numbers, unsupported currencies, and oversized strings.
   if (!body || typeof body !== "object") {
     return { ok: false, message: "Request body must be an object" };
   }
@@ -1653,6 +1691,8 @@ function parseRoutePlanBody(body: unknown):
       ok: false;
       message: string;
     } {
+  // Route planning accepts either text labels or exact coordinates.
+  // Coordinates are optional, but when provided they must pass parseGeoPoint range checks.
   if (!body || typeof body !== "object") {
     return { ok: false, message: "Request body must be an object" };
   }
@@ -1683,6 +1723,8 @@ function parseRoutePlanBody(body: unknown):
 }
 
 function parseGeoPoint(value: unknown): { lat: number; lng: number } | undefined {
+  // Never trust browser-provided coordinates blindly.
+  // Latitude/longitude must be finite numbers within real Earth coordinate ranges.
   if (!value || typeof value !== "object") {
     return undefined;
   }
@@ -1713,6 +1755,8 @@ function parseLocationBody(body: unknown):
       ok: false;
       message: string;
     } {
+  // Live GPS updates are accepted only with realistic coordinate and metadata ranges.
+  // This prevents corrupted map pins and keeps impossible values out of the database.
   if (!body || typeof body !== "object") {
     return { ok: false, message: "Request body must be an object" };
   }

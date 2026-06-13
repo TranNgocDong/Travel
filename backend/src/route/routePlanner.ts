@@ -121,10 +121,14 @@ export async function buildOpenStreetRoutePlan(tripId: string, input: RouteBuild
     throw new RoutePlannerError("INVALID_ROUTE_INPUT", "Điểm đi và điểm đến phải có từ 2 đến 160 ký tự");
   }
 
+  // Text inputs are geocoded through Nominatim, while exact GPS inputs skip geocoding.
+  // This lets "my location" and member-location routing work even when the place name is not searchable.
   const [origin, destination] = await Promise.all([
     hasOriginCoordinate ? Promise.resolve(createCoordinatePlace(originCoordinate, originQuery || "Vị trí của bạn")) : geocodePlace(originQuery),
     hasDestinationCoordinate ? Promise.resolve(createCoordinatePlace(destinationCoordinate, destinationQuery || "Điểm hẹn")) : geocodePlace(destinationQuery),
   ]);
+  // OSRM returns the actual road geometry and duration. Weather is added after the route exists
+  // so each waypoint can use its estimated arrival time.
   const route = await fetchOsrmRoute(origin.coordinate, destination.coordinate);
   const waypoints = await enrichWaypointsWithWeather(
     createDynamicWaypoints(origin, destination, route.geometry, route.distanceKm, route.durationMinutes),
@@ -159,6 +163,7 @@ export async function reverseGeocodePoint(coordinate: GeoPoint): Promise<Reverse
   }
 
   const baseUrl = process.env.NOMINATIM_BASE_URL ?? "https://nominatim.openstreetmap.org";
+  // Prefer Vietnamese labels when Nominatim has them, but allow English fallback.
   const url = new URL("/reverse", baseUrl);
   url.searchParams.set("lat", String(coordinate.lat));
   url.searchParams.set("lon", String(coordinate.lng));
@@ -215,6 +220,8 @@ export function createDynamicWaypoints(
   distanceKm: number,
   durationMinutes: number,
 ): RouteWaypoint[] {
+  // Waypoints are intentionally simple: start, optional rest midpoint, and destination.
+  // The UI stays readable while still showing distance, ETA, weather, and safety advice.
   const midpoint = geometry[Math.floor(geometry.length / 2)] ?? origin.coordinate;
   const needsRestStop = distanceKm >= 120;
   const destinationBorderChecklist = createBorderChecklist(destination.name);
@@ -337,6 +344,8 @@ interface OpenMeteoForecastResponse {
 
 async function geocodePlace(query: string): Promise<GeocodedPlace> {
   const baseUrl = process.env.NOMINATIM_BASE_URL ?? "https://nominatim.openstreetmap.org";
+  // Nominatim is the free fallback when Google Places is not configured.
+  // It covers many places, but small local businesses can still be missing compared with Google Maps.
   const url = new URL("/search", baseUrl);
   url.searchParams.set("q", query);
   url.searchParams.set("format", "jsonv2");
@@ -370,6 +379,7 @@ function createCoordinatePlace(coordinate: GeoPoint, label: string): GeocodedPla
 
 async function fetchOsrmRoute(origin: GeoPoint, destination: GeoPoint): Promise<OsrmRoute> {
   const baseUrl = process.env.OSRM_BASE_URL ?? "https://router.project-osrm.org";
+  // OSRM expects lng,lat order, unlike the app's normal lat,lng shape.
   const coordinates = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
   const url = new URL(`/route/v1/driving/${coordinates}`, baseUrl);
   url.searchParams.set("overview", "full");
@@ -395,6 +405,8 @@ async function fetchOsrmRoute(origin: GeoPoint, destination: GeoPoint): Promise<
 }
 
 async function enrichWaypointsWithWeather(waypoints: RouteWaypoint[], now: Date, totalDistanceKm: number, totalDurationMinutes: number): Promise<RouteWaypoint[]> {
+  // Weather is fetched per waypoint using an ETA approximation.
+  // If Open-Meteo fails for one waypoint, that waypoint falls back to a safe stub instead of breaking route planning.
   const weatherByWaypoint = await Promise.all(
     waypoints.map(async (waypoint, index) => {
       try {
@@ -415,6 +427,8 @@ async function enrichWaypointsWithWeather(waypoints: RouteWaypoint[], now: Date,
 
 async function fetchOpenMeteoWeather(coordinate: GeoPoint, targetTime: Date): Promise<RouteWeather> {
   const baseUrl = process.env.OPEN_METEO_BASE_URL ?? "https://api.open-meteo.com";
+  // Open-Meteo needs no API key and is used for route-aware weather previews.
+  // The nearest hourly forecast is more useful than a single current value for long rides.
   const url = new URL("/v1/forecast", baseUrl);
   url.searchParams.set("latitude", String(coordinate.lat));
   url.searchParams.set("longitude", String(coordinate.lng));
@@ -455,6 +469,8 @@ async function fetchOpenMeteoWeather(coordinate: GeoPoint, targetTime: Date): Pr
 
 async function fetchJson<T>(url: URL, fallbackCode: RoutePlannerError["code"]): Promise<T> {
   const controller = new AbortController();
+  // External providers should not hang the backend forever.
+  // A 12s timeout keeps the UI responsive and lets callers show a useful fallback error.
   const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
