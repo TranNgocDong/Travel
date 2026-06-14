@@ -1271,6 +1271,9 @@ try {
   process.exit(1);
 }
 
+/**
+ * Sends a lightweight live-sync notification to connected trip clients.
+ */
 function publishTripChange(tripId: string, actorUserId: string, type: LiveSyncEventType, actorDisplayName?: string) {
   liveSyncHub.publish({
     tripId,
@@ -1280,6 +1283,9 @@ function publishTripChange(tripId: string, actorUserId: string, type: LiveSyncEv
   });
 }
 
+/**
+ * Records an auditable action for security/accountability history.
+ */
 async function recordAuditEvent(input: {
   tripId: string;
   actor: UserAccount;
@@ -1307,6 +1313,9 @@ async function recordAuditEvent(input: {
   }
 }
 
+/**
+ * Removes unsafe or oversized audit metadata before it is stored.
+ */
 function scrubAuditMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
   const safeMetadata: Record<string, unknown> = {};
 
@@ -1326,6 +1335,9 @@ function scrubAuditMetadata(metadata: Record<string, unknown>): Record<string, u
   return safeMetadata;
 }
 
+/**
+ * Authenticates a request using a Firebase bearer token.
+ */
 async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<UserAccount | null> {
   const authorization = request.headers.authorization;
 
@@ -1361,6 +1373,9 @@ async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promis
   }
 }
 
+/**
+ * Enforces trip-level RBAC for read/write/manage actions.
+ */
 async function requireTripRole(reply: FastifyReply, tripId: string, userId: string, mode: "read" | "write" | "manage"): Promise<boolean> {
   const role = await tripAccess.getRole(tripId, userId);
 
@@ -1379,6 +1394,9 @@ async function requireTripRole(reply: FastifyReply, tripId: string, userId: stri
   return true;
 }
 
+/**
+ * Converts trip members into the participant shape expected by split-bill logic.
+ */
 function toSplitParticipants(members: TripMember[]) {
   return members.map((member) => ({
     id: member.userId,
@@ -1386,6 +1404,9 @@ function toSplitParticipants(members: TripMember[]) {
   }));
 }
 
+/**
+ * Counts how many people are included in an expense split.
+ */
 function countExpenseParticipants(split: ExpenseSplit): number {
   if (split.type === "equal") {
     return split.userIds.length;
@@ -1398,6 +1419,9 @@ function countExpenseParticipants(split: ExpenseSplit): number {
   return split.shares.length;
 }
 
+/**
+ * Extracts and validates the trip id route parameter.
+ */
 function parseTripParams(params: unknown, reply: FastifyReply): { tripId: string | null } {
   if (!params || typeof params !== "object" || typeof (params as { tripId?: unknown }).tripId !== "string") {
     reply.status(400).send({
@@ -1410,6 +1434,9 @@ function parseTripParams(params: unknown, reply: FastifyReply): { tripId: string
   return { tripId: (params as { tripId: string }).tripId };
 }
 
+/**
+ * Extracts a member route id from route parameters.
+ */
 function parseRouteIdParam(params: unknown): string | null {
   if (!params || typeof params !== "object") {
     return null;
@@ -1419,6 +1446,9 @@ function parseRouteIdParam(params: unknown): string | null {
   return typeof routeId === "string" && routeId.length >= 8 && routeId.length <= 120 ? routeId : null;
 }
 
+/**
+ * Validates the request body for creating a new trip.
+ */
 function parseCreateTripBody(body: unknown):
   | {
       ok: true;
@@ -1452,6 +1482,9 @@ function parseCreateTripBody(body: unknown):
   };
 }
 
+/**
+ * Validates the request body for changing trip lifecycle status.
+ */
 function parseTripStatusBody(body: unknown):
   | {
       ok: true;
@@ -1477,6 +1510,9 @@ function parseTripStatusBody(body: unknown):
   };
 }
 
+/**
+ * Creates a readable, unique-enough trip id from a title.
+ */
 function createTripId(title: string): string {
   const slug = title
     .normalize("NFD")
@@ -1489,18 +1525,27 @@ function createTripId(title: string): string {
   return `${slug || "trip"}-${randomUUID().slice(0, 8)}`;
 }
 
+/**
+ * Parses and clamps chat message list limit.
+ */
 function parseMessageLimit(query: unknown): number {
   const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
   const parsed = parseFiniteNumber(input.limit);
   return parsed === null ? 50 : Math.max(1, Math.min(100, Math.trunc(parsed)));
 }
 
+/**
+ * Parses and clamps audit event list limit.
+ */
 function parseAuditLimit(query: unknown): number {
   const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
   const parsed = parseFiniteNumber(input.limit);
   return parsed === null ? 80 : Math.max(1, Math.min(200, Math.trunc(parsed)));
 }
 
+/**
+ * Parses POI filter query parameters.
+ */
 function parsePoiQuery(query: unknown): { kinds: TripPoiKind[]; limit: number } {
   const input = query && typeof query === "object" ? (query as Record<string, unknown>) : {};
   const kinds = parsePoiKinds(input.types);
@@ -1512,6 +1557,9 @@ function parsePoiQuery(query: unknown): { kinds: TripPoiKind[]; limit: number } 
   };
 }
 
+/**
+ * Parses the requested POI kinds and falls back to all supported kinds.
+ */
 function parsePoiKinds(value: unknown): TripPoiKind[] {
   const rawValues = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   const kinds = new Set<TripPoiKind>();
@@ -1525,6 +1573,9 @@ function parsePoiKinds(value: unknown): TripPoiKind[] {
   return [...kinds];
 }
 
+/**
+ * Validates a chat message request body.
+ */
 function parseMessageBody(body: unknown):
   | {
       ok: true;
@@ -1551,6 +1602,9 @@ function parseMessageBody(body: unknown):
   };
 }
 
+/**
+ * Validates the request body for creating a shared map marker.
+ */
 function parseMapMarkerBody(body: unknown):
   | {
       ok: true;
@@ -1602,6 +1656,9 @@ function parseMapMarkerBody(body: unknown):
   };
 }
 
+/**
+ * Validates the request body for creating an expense.
+ */
 function parseCreateExpenseBody(body: unknown):
   | {
       ok: true;
@@ -1671,6 +1728,9 @@ function parseCreateExpenseBody(body: unknown):
   };
 }
 
+/**
+ * Validates the request body for route planning.
+ */
 function parseRoutePlanBody(body: unknown):
   | {
       ok: true;
@@ -1722,6 +1782,9 @@ function parseRoutePlanBody(body: unknown):
   };
 }
 
+/**
+ * Parses and validates a latitude/longitude object.
+ */
 function parseGeoPoint(value: unknown): { lat: number; lng: number } | undefined {
   // Never trust browser-provided coordinates blindly.
   // Latitude/longitude must be finite numbers within real Earth coordinate ranges.
@@ -1740,6 +1803,9 @@ function parseGeoPoint(value: unknown): { lat: number; lng: number } | undefined
   return { lat, lng };
 }
 
+/**
+ * Validates a live GPS update request body.
+ */
 function parseLocationBody(body: unknown):
   | {
       ok: true;
@@ -1804,6 +1870,9 @@ function parseLocationBody(body: unknown):
   };
 }
 
+/**
+ * Validates the request body for adding a trip member.
+ */
 function parseMemberBody(body: unknown):
   | {
       ok: true;
@@ -1852,6 +1921,9 @@ function parseMemberBody(body: unknown):
   };
 }
 
+/**
+ * Validates member role/profile update input.
+ */
 function parseMemberPatchBody(body: unknown):
   | {
       ok: true;
@@ -1934,10 +2006,16 @@ function parseMemberPatchBody(body: unknown):
   };
 }
 
+/**
+ * Parses a trip role string.
+ */
 function parseRole(value: unknown): TripRole | null {
   return value === "owner" || value === "editor" || value === "viewer" ? value : null;
 }
 
+/**
+ * Returns default optional profile fields for a new or reactivated member.
+ */
 function defaultMemberProfile(): Pick<TripMember, "phoneNumber" | "homeBase" | "travelStatus" | "statusEmoji" | "avatarColor" | "backgroundKey"> {
   return {
     phoneNumber: null,
@@ -1949,6 +2027,9 @@ function defaultMemberProfile(): Pick<TripMember, "phoneNumber" | "homeBase" | "
   };
 }
 
+/**
+ * Parses optional profile text while preserving the difference between omitted and cleared fields.
+ */
 function parseProfileText(value: unknown, maxLength: number): string | null | undefined {
   const parsed = parseString(value);
 
@@ -1959,18 +2040,30 @@ function parseProfileText(value: unknown, maxLength: number): string | null | un
   return parsed.length <= maxLength ? parsed : undefined;
 }
 
+/**
+ * Parses a member travel status value.
+ */
 function parseTripMemberTravelStatus(value: unknown): TripMemberTravelStatus | null {
   return value === "riding" || value === "resting" || value === "need-help" || value === "offline" ? value : null;
 }
 
+/**
+ * Parses a member avatar color value.
+ */
 function parseTripMemberAvatarColor(value: unknown): TripMemberAvatarColor | null {
   return value === "teal" || value === "sky" || value === "green" || value === "amber" || value === "rose" || value === "violet" ? value : null;
 }
 
+/**
+ * Parses a member background theme value.
+ */
 function parseTripMemberBackgroundKey(value: unknown): TripMemberBackgroundKey | null {
   return value === "forest" || value === "coast" || value === "mountain" || value === "night" || value === "sunrise" ? value : null;
 }
 
+/**
+ * Parses a short emoji/status marker for a member profile.
+ */
 function parseStatusEmoji(value: unknown): string | null {
   const parsed = parseString(value);
 
@@ -1981,10 +2074,16 @@ function parseStatusEmoji(value: unknown): string | null {
   return [...parsed].length <= 2 ? parsed : null;
 }
 
+/**
+ * Parses a trip lifecycle status.
+ */
 function parseTripStatus(value: unknown): TripStatus | null {
   return value === "active" || value === "completed" || value === "archived" ? value : null;
 }
 
+/**
+ * Parses a shared map marker kind.
+ */
 function parseMapMarkerKind(value: unknown): TripMapMarkerKind | null {
   return value === "ping" ||
     value === "meetup" ||
@@ -1997,6 +2096,9 @@ function parseMapMarkerKind(value: unknown): TripMapMarkerKind | null {
     : null;
 }
 
+/**
+ * Extracts a member id from route parameters.
+ */
 function parseMemberId(params: unknown): string | null {
   if (!params || typeof params !== "object") {
     return null;
@@ -2005,6 +2107,9 @@ function parseMemberId(params: unknown): string | null {
   return parseString((params as { memberId?: unknown }).memberId);
 }
 
+/**
+ * Extracts a marker id from route parameters.
+ */
 function parseMarkerId(params: unknown): string | null {
   if (!params || typeof params !== "object") {
     return null;
@@ -2013,10 +2118,16 @@ function parseMarkerId(params: unknown): string | null {
   return parseString((params as { markerId?: unknown }).markerId);
 }
 
+/**
+ * Returns whether a member is still active in the current trip.
+ */
 function isActiveTripMember(member: TripMember): boolean {
   return member.active;
 }
 
+/**
+ * Checks that an expense references only active trip members.
+ */
 function isExpenseLimitedToMembers(expense: StoredExpense, members: TripMember[]): boolean {
   const activeMemberIds = new Set(members.map((member) => member.userId));
 
@@ -2035,6 +2146,9 @@ function isExpenseLimitedToMembers(expense: StoredExpense, members: TripMember[]
   return expense.split.amounts.every((amount) => activeMemberIds.has(amount.userId));
 }
 
+/**
+ * Parses and validates the split-bill payload for one expense.
+ */
 function parseSplit(value: unknown):
   | {
       ok: true;
@@ -2096,15 +2210,24 @@ function parseSplit(value: unknown):
   return { ok: false, message: "Split type is not supported" };
 }
 
+/**
+ * Parses a non-empty trimmed string.
+ */
 function parseString(value: unknown): string | null {
   return typeof value === "string" ? value.trim() : null;
 }
 
+/**
+ * Parses a finite number from a primitive value.
+ */
 function parseFiniteNumber(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+/**
+ * Parses an optional finite number, preserving null and omitted separately.
+ */
 function parseOptionalFiniteNumber(value: unknown): number | null | undefined {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -2114,18 +2237,30 @@ function parseOptionalFiniteNumber(value: unknown): number | null | undefined {
   return parsed === null ? undefined : parsed;
 }
 
+/**
+ * Parses an array of strings, dropping non-string values.
+ */
 function parseStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(parseString).filter((item): item is string => Boolean(item)) : [];
 }
 
+/**
+ * Returns an array value or an empty array when the input is not an array.
+ */
 function parseArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+/**
+ * Returns a plain object-like record or null.
+ */
 function parseObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
+/**
+ * Converts split-bill domain errors into HTTP responses.
+ */
 function sendSplitBillError(reply: FastifyReply, error: unknown) {
   if (error instanceof SplitBillError) {
     return reply.status(400).send({
@@ -2137,6 +2272,9 @@ function sendSplitBillError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+/**
+ * Converts route-planner domain errors into HTTP responses.
+ */
 function sendRoutePlannerError(reply: FastifyReply, error: unknown) {
   if (error instanceof RoutePlannerError) {
     const statusCode = error.code === "INVALID_ROUTE_INPUT" ? 400 : error.code === "GEOCODE_NOT_FOUND" || error.code === "ROUTE_NOT_FOUND" ? 404 : 502;
@@ -2150,6 +2288,9 @@ function sendRoutePlannerError(reply: FastifyReply, error: unknown) {
   throw error;
 }
 
+/**
+ * Parses the comma-separated CORS origin allowlist from environment variables.
+ */
 function parseCorsOrigins(value: string | undefined): string[] {
   const localOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
 
@@ -2165,6 +2306,9 @@ function parseCorsOrigins(value: string | undefined): string[] {
   return origins.length ? origins : localOrigins;
 }
 
+/**
+ * Builds SSE headers with the resolved CORS origin.
+ */
 function buildLiveSyncHeaders(origin: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -2184,6 +2328,9 @@ function buildLiveSyncHeaders(origin: string | undefined): Record<string, string
   return headers;
 }
 
+/**
+ * Resolves whether a request origin is allowed to receive live-sync responses.
+ */
 function resolveCorsOrigin(origin: string | undefined): string | null {
   if (!origin) {
     return null;

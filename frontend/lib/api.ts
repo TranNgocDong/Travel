@@ -290,6 +290,10 @@ export type ApiTripLiveEvent = {
   createdAt: string;
 };
 
+/**
+ * Waits for Firebase Auth to finish restoring the current browser session.
+ * Use this before calling protected APIs so remembered logins do not look signed out.
+ */
 export async function getCurrentFirebaseUser(): Promise<User | null> {
   const firebaseAuth = getFirebaseAuth();
 
@@ -313,6 +317,10 @@ export async function getCurrentFirebaseUser(): Promise<User | null> {
   return authReadyPromise;
 }
 
+/**
+ * Signs in with email/password through Firebase, then asks the backend who this user is.
+ * The remember flag controls Firebase persistence, not manual token storage.
+ */
 export async function login(email: string, password: string, remember = false): Promise<ApiUser> {
   const firebaseAuth = getFirebaseAuth();
   // Security: choose Firebase's managed session persistence instead of writing ID tokens to localStorage ourselves.
@@ -321,6 +329,9 @@ export async function login(email: string, password: string, remember = false): 
   return fetchMe();
 }
 
+/**
+ * Creates a Firebase email/password account and syncs the display name before loading backend profile data.
+ */
 export async function registerWithEmail(payload: { displayName: string; email: string; password: string; remember?: boolean }): Promise<ApiUser> {
   const firebaseAuth = getFirebaseAuth();
   // Security: persistence is set before account creation so the session lifetime is explicit.
@@ -333,6 +344,9 @@ export async function registerWithEmail(payload: { displayName: string; email: s
   return fetchMe();
 }
 
+/**
+ * Starts Google OAuth login in a popup and returns the matching backend user profile.
+ */
 export async function loginWithGoogle(remember = false): Promise<ApiUser> {
   const firebaseAuth = getFirebaseAuth();
   // Security: do not copy OAuth/Firebase tokens into browser storage; the SDK handles refresh safely.
@@ -341,6 +355,9 @@ export async function loginWithGoogle(remember = false): Promise<ApiUser> {
   return fetchMe();
 }
 
+/**
+ * Starts Apple OAuth login in a popup and returns the matching backend user profile.
+ */
 export async function loginWithApple(remember = false): Promise<ApiUser> {
   const firebaseAuth = getFirebaseAuth();
   // Security: Apple provider must be enabled in Firebase Console; failed provider setup is surfaced as a normal auth error.
@@ -349,22 +366,35 @@ export async function loginWithApple(remember = false): Promise<ApiUser> {
   return fetchMe();
 }
 
+/**
+ * Sends a Firebase password reset email.
+ * The app never handles raw reset tokens directly.
+ */
 export async function requestPasswordReset(email: string): Promise<void> {
   await sendPasswordResetEmail(getFirebaseAuth(), email);
 }
 
+/**
+ * Signs out from Firebase and clears the cached auth restoration promise.
+ */
 export async function logout(): Promise<void> {
   await signOut(getFirebaseAuth());
   currentFirebaseUser = null;
   authReadyPromise = null;
 }
 
+/**
+ * Loads the authenticated user's backend-safe profile.
+ */
 export async function fetchMe(): Promise<ApiUser> {
   const response = await authedFetch(`${apiBaseUrl}/me`);
   const data = await parseApiResponse<{ user: ApiUser }>(response);
   return data.user;
 }
 
+/**
+ * Lists all trips that the current user can access.
+ */
 export async function fetchTrips(): Promise<ApiTrip[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips`, {
     cache: "no-store",
@@ -373,6 +403,9 @@ export async function fetchTrips(): Promise<ApiTrip[]> {
   return data.trips;
 }
 
+/**
+ * Creates a new trip workspace and makes the current user its owner.
+ */
 export async function createTrip(payload: { title: string; currency?: CurrencyCode }): Promise<ApiTrip> {
   const response = await authedFetch(`${apiBaseUrl}/trips`, {
     method: "POST",
@@ -388,6 +421,9 @@ export async function createTrip(payload: { title: string; currency?: CurrencyCo
   return data.trip;
 }
 
+/**
+ * Changes a trip lifecycle state: active, completed, or archived.
+ */
 export async function updateTripStatus(targetTripId: string, status: ApiTripStatus): Promise<ApiTrip> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/status`, {
     method: "PATCH",
@@ -400,6 +436,10 @@ export async function updateTripStatus(targetTripId: string, status: ApiTripStat
   return data.trip;
 }
 
+/**
+ * Deletes a trip workspace on the backend.
+ * Only the backend decides whether the current user has permission.
+ */
 export async function deleteTrip(targetTripId: string): Promise<void> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}`, {
     method: "DELETE",
@@ -412,6 +452,9 @@ export async function deleteTrip(targetTripId: string): Promise<void> {
   await parseApiResponse(response);
 }
 
+/**
+ * Loads all expenses for a trip, newest first.
+ */
 export async function fetchExpenses(targetTripId = defaultTripId): Promise<ApiExpense[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/expenses`, {
     cache: "no-store",
@@ -420,6 +463,9 @@ export async function fetchExpenses(targetTripId = defaultTripId): Promise<ApiEx
   return data.expenses;
 }
 
+/**
+ * Loads members and profile fields for a trip.
+ */
 export async function fetchTripMembers(targetTripId = defaultTripId): Promise<ApiTripMember[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/members`, {
     cache: "no-store",
@@ -428,6 +474,9 @@ export async function fetchTripMembers(targetTripId = defaultTripId): Promise<Ap
   return data.members;
 }
 
+/**
+ * Loads active shared GPS locations for trip members.
+ */
 export async function fetchTripLocations(targetTripId = defaultTripId): Promise<ApiMemberLocation[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations`, {
     cache: "no-store",
@@ -436,6 +485,9 @@ export async function fetchTripLocations(targetTripId = defaultTripId): Promise<
   return data.locations;
 }
 
+/**
+ * Reverse-geocodes a member's latest shared GPS point into a readable address.
+ */
 export async function fetchMemberLocationAddress(memberId: string, targetTripId = defaultTripId): Promise<ApiMemberLocationAddress> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations/${memberId}/address`, {
     cache: "no-store",
@@ -444,6 +496,9 @@ export async function fetchMemberLocationAddress(memberId: string, targetTripId 
   return data.address;
 }
 
+/**
+ * Loads shared map markers such as meetup points, warnings, food, lodging, or fuel.
+ */
 export async function fetchTripMapMarkers(targetTripId = defaultTripId): Promise<ApiMapMarker[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/map-markers`, {
     cache: "no-store",
@@ -452,6 +507,9 @@ export async function fetchTripMapMarkers(targetTripId = defaultTripId): Promise
   return data.markers;
 }
 
+/**
+ * Loads nearby POIs along the current route.
+ */
 export async function fetchTripPois(targetTripId = defaultTripId, types: ApiTripPoiKind[] = ["food", "lodging", "fuel"]): Promise<ApiTripPoi[]> {
   const params = new URLSearchParams();
   params.set("types", types.join(","));
@@ -462,6 +520,9 @@ export async function fetchTripPois(targetTripId = defaultTripId, types: ApiTrip
   return data.pois;
 }
 
+/**
+ * Creates a shared marker on the trip map.
+ */
 export async function createTripMapMarker(
   payload: {
     label: string;
@@ -482,6 +543,9 @@ export async function createTripMapMarker(
   return data.marker;
 }
 
+/**
+ * Deletes a shared map marker from the selected trip.
+ */
 export async function deleteTripMapMarker(markerId: string, targetTripId = defaultTripId): Promise<void> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/map-markers/${markerId}`, {
     method: "DELETE",
@@ -494,6 +558,9 @@ export async function deleteTripMapMarker(markerId: string, targetTripId = defau
   await parseApiResponse(response);
 }
 
+/**
+ * Loads lightweight online/presence information for members in the room.
+ */
 export async function fetchTripPresence(targetTripId = defaultTripId): Promise<ApiPresenceUser[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/presence`, {
     cache: "no-store",
@@ -502,6 +569,9 @@ export async function fetchTripPresence(targetTripId = defaultTripId): Promise<A
   return data.presence;
 }
 
+/**
+ * Loads recent trip chat messages.
+ */
 export async function fetchTripMessages(targetTripId = defaultTripId): Promise<ApiTripMessage[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/messages`, {
     cache: "no-store",
@@ -510,6 +580,9 @@ export async function fetchTripMessages(targetTripId = defaultTripId): Promise<A
   return data.messages;
 }
 
+/**
+ * Sends a chat message to the selected trip room.
+ */
 export async function sendTripMessage(body: string, targetTripId = defaultTripId): Promise<ApiTripMessage> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/messages`, {
     method: "POST",
@@ -522,6 +595,9 @@ export async function sendTripMessage(body: string, targetTripId = defaultTripId
   return data.message;
 }
 
+/**
+ * Loads the latest saved route plan for a trip.
+ */
 export async function fetchRoutePlan(targetTripId = defaultTripId): Promise<ApiRoutePlan> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/route-plan`, {
     cache: "no-store",
@@ -530,6 +606,10 @@ export async function fetchRoutePlan(targetTripId = defaultTripId): Promise<ApiR
   return data.routePlan;
 }
 
+/**
+ * Requests a new route plan from the backend.
+ * Labels are used for display, while optional coordinates improve routing accuracy.
+ */
 export async function planRoute(
   payload: {
     origin: string;
@@ -550,6 +630,9 @@ export async function planRoute(
   return data.routePlan;
 }
 
+/**
+ * Loads personal route layers created by trip members.
+ */
 export async function fetchMemberRoutes(targetTripId = defaultTripId): Promise<ApiMemberRoute[]> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/member-routes`, {
     cache: "no-store",
@@ -558,6 +641,9 @@ export async function fetchMemberRoutes(targetTripId = defaultTripId): Promise<A
   return data.memberRoutes;
 }
 
+/**
+ * Creates or replaces the current user's personal route layer.
+ */
 export async function createMemberRoute(
   payload: {
     origin: string;
@@ -578,6 +664,9 @@ export async function createMemberRoute(
   return data.memberRoute;
 }
 
+/**
+ * Deletes a member route layer.
+ */
 export async function deleteMemberRoute(routeId: string, targetTripId = defaultTripId): Promise<void> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/member-routes/${routeId}`, {
     method: "DELETE",
@@ -590,6 +679,9 @@ export async function deleteMemberRoute(routeId: string, targetTripId = defaultT
   await parseApiResponse(response);
 }
 
+/**
+ * Sends the current user's latest GPS point to the trip.
+ */
 export async function shareMyLocation(
   payload: {
     latitude: number;
@@ -611,6 +703,9 @@ export async function shareMyLocation(
   return data.location;
 }
 
+/**
+ * Stops sharing the current user's GPS location for the trip.
+ */
 export async function stopSharingMyLocation(targetTripId = defaultTripId): Promise<void> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/locations/me`, {
     method: "DELETE",
@@ -623,6 +718,9 @@ export async function stopSharingMyLocation(targetTripId = defaultTripId): Promi
   await parseApiResponse(response);
 }
 
+/**
+ * Invites/adds a member to the trip by email or display name.
+ */
 export async function addTripMember(payload: { displayName?: string; email?: string; role: ApiTripRole }, targetTripId = defaultTripId): Promise<ApiTripMember> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/members`, {
     method: "POST",
@@ -635,6 +733,9 @@ export async function addTripMember(payload: { displayName?: string; email?: str
   return data.member;
 }
 
+/**
+ * Updates a member's role or profile fields.
+ */
 export async function updateTripMember(
   memberId: string,
   payload: {
@@ -660,6 +761,9 @@ export async function updateTripMember(
   return data.member;
 }
 
+/**
+ * Removes a member from the active trip room.
+ */
 export async function removeTripMember(memberId: string, targetTripId = defaultTripId): Promise<void> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/members/${memberId}`, {
     method: "DELETE",
@@ -672,6 +776,9 @@ export async function removeTripMember(memberId: string, targetTripId = defaultT
   await parseApiResponse(response);
 }
 
+/**
+ * Loads split-bill balances and the "who pays whom" settlement list.
+ */
 export async function fetchSettlementResult(targetTripId = defaultTripId): Promise<{
   balances: ApiBalance[];
   settlements: ApiSettlement[];
@@ -682,6 +789,9 @@ export async function fetchSettlementResult(targetTripId = defaultTripId): Promi
   return parseApiResponse(response);
 }
 
+/**
+ * Creates an expense in the selected trip.
+ */
 export async function createExpense(payload: ApiCreateExpensePayload, targetTripId = defaultTripId): Promise<ApiExpense> {
   const response = await authedFetch(`${apiBaseUrl}/trips/${targetTripId}/expenses`, {
     method: "POST",
@@ -694,6 +804,9 @@ export async function createExpense(payload: ApiCreateExpensePayload, targetTrip
   return data.expense;
 }
 
+/**
+ * Subscribes to live trip events over Server-Sent Events and returns an unsubscribe function.
+ */
 export function subscribeToTripEvents(
   targetTripId: string,
   handlers: {
@@ -713,6 +826,9 @@ export function subscribeToTripEvents(
   };
 }
 
+/**
+ * Fetch wrapper that attaches the current Firebase ID token to protected backend requests.
+ */
 async function authedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const token = await getFirebaseIdToken();
 
@@ -731,6 +847,9 @@ async function authedFetch(input: RequestInfo | URL, init: RequestInit = {}): Pr
   });
 }
 
+/**
+ * Opens and maintains the SSE connection for one trip.
+ */
 async function listenToTripEvents(
   targetTripId: string,
   signal: AbortSignal,
@@ -771,6 +890,9 @@ async function listenToTripEvents(
   }
 }
 
+/**
+ * Reads raw SSE bytes and emits parsed trip events.
+ */
 async function readSseStream(stream: ReadableStream<Uint8Array>, signal: AbortSignal, onEvent: (event: ApiTripLiveEvent) => void) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -803,6 +925,9 @@ async function readSseStream(stream: ReadableStream<Uint8Array>, signal: AbortSi
   }
 }
 
+/**
+ * Parses one SSE chunk into a typed trip event.
+ */
 function parseSseEvent(chunk: string): ApiTripLiveEvent | null {
   let eventName = "message";
   const dataLines: string[] = [];
@@ -830,6 +955,9 @@ function parseSseEvent(chunk: string): ApiTripLiveEvent | null {
   }
 }
 
+/**
+ * Waits for a reconnect delay, but resolves early if the SSE connection is aborted.
+ */
 function delay(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     const timeout = window.setTimeout(resolve, ms);
@@ -845,6 +973,9 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/**
+ * Returns the current Firebase ID token or throws if the user is not signed in.
+ */
 async function getFirebaseIdToken(): Promise<string> {
   const user = await getCurrentFirebaseUser();
 
@@ -855,6 +986,9 @@ async function getFirebaseIdToken(): Promise<string> {
   return user.getIdToken();
 }
 
+/**
+ * Converts a backend Response into typed data or throws a readable API error.
+ */
 async function parseApiResponse<T>(response: Response): Promise<T> {
   // The backend normally returns JSON with a message on errors.
   // If a response is not JSON, this still throws a friendly error instead of crashing the UI.
@@ -867,6 +1001,9 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+/**
+ * Extracts a backend error message from a response body.
+ */
 function readApiErrorMessage(data: unknown): string | null {
   if (!data || typeof data !== "object" || !("message" in data)) {
     return null;

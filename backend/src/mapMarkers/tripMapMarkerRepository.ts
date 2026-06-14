@@ -36,14 +36,23 @@ export interface TripMapMarkerRepository {
 export class InMemoryTripMapMarkerRepository implements TripMapMarkerRepository {
   private readonly markersByTrip = new Map<string, TripMapMarker[]>();
 
+  /**
+   * Lists saved map markers in memory, newest first.
+   */
   async listByTrip(tripId: string): Promise<TripMapMarker[]> {
     return [...(this.markersByTrip.get(tripId) ?? [])].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   }
 
+  /**
+   * Finds one in-memory marker by trip and marker id.
+   */
   async findById(tripId: string, markerId: string): Promise<TripMapMarker | null> {
     return (this.markersByTrip.get(tripId) ?? []).find((marker) => marker.id === markerId) ?? null;
   }
 
+  /**
+   * Creates or replaces an in-memory map marker.
+   */
   async create(input: CreateTripMapMarkerInput): Promise<TripMapMarker> {
     const marker: TripMapMarker = {
       id: input.id,
@@ -61,6 +70,9 @@ export class InMemoryTripMapMarkerRepository implements TripMapMarkerRepository 
     return marker;
   }
 
+  /**
+   * Removes an in-memory marker from a trip.
+   */
   async remove(tripId: string, markerId: string): Promise<void> {
     const current = this.markersByTrip.get(tripId) ?? [];
     this.markersByTrip.set(
@@ -73,6 +85,9 @@ export class InMemoryTripMapMarkerRepository implements TripMapMarkerRepository 
 export class PostgresTripMapMarkerRepository implements TripMapMarkerRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Lists saved map markers from PostgreSQL, newest first.
+   */
   async listByTrip(tripId: string): Promise<TripMapMarker[]> {
     const result = await this.pool.query<MarkerRow>(
       `
@@ -87,6 +102,9 @@ export class PostgresTripMapMarkerRepository implements TripMapMarkerRepository 
     return result.rows.map(rowToMarker);
   }
 
+  /**
+   * Finds a persisted marker by id within a trip boundary.
+   */
   async findById(tripId: string, markerId: string): Promise<TripMapMarker | null> {
     const result = await this.pool.query<MarkerRow>(
       `
@@ -100,6 +118,9 @@ export class PostgresTripMapMarkerRepository implements TripMapMarkerRepository 
     return result.rows[0] ? rowToMarker(result.rows[0]) : null;
   }
 
+  /**
+   * Persists a user-created map marker.
+   */
   async create(input: CreateTripMapMarkerInput): Promise<TripMapMarker> {
     const result = await this.pool.query<MarkerRow>(
       `
@@ -123,6 +144,9 @@ export class PostgresTripMapMarkerRepository implements TripMapMarkerRepository 
     return rowToMarker(result.rows[0]!);
   }
 
+  /**
+   * Deletes a saved marker from PostgreSQL.
+   */
   async remove(tripId: string, markerId: string): Promise<void> {
     await this.pool.query("DELETE FROM trip_map_markers WHERE trip_id = $1 AND id = $2", [tripId, markerId]);
   }
@@ -140,6 +164,9 @@ interface MarkerRow {
   created_at: Date | string;
 }
 
+/**
+ * Converts a PostgreSQL marker row into the API model.
+ */
 function rowToMarker(row: MarkerRow): TripMapMarker {
   return {
     id: row.id,

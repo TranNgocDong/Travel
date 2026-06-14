@@ -18,11 +18,19 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const dangerousSqlPattern = /('|--|;|\/\*|\*\/|\b(union|select|insert|update|delete|drop|alter|exec)\b)/i;
 const controlCharactersPattern = /[\u0000-\u001F\u007F]/g;
 
+/**
+ * Normalizes and trims text that comes from authentication forms.
+ * This reduces weird Unicode/control-character input before validation runs.
+ */
 export function sanitizeAuthText(value: string, maxLength = 160): string {
   // Security: normalize Unicode and remove control characters before validation to reduce spoofing/XSS payload tricks.
   return value.normalize("NFKC").replace(controlCharactersPattern, "").trim().slice(0, maxLength);
 }
 
+/**
+ * Validates an email address for login/register forms.
+ * It returns the normalized lowercase email so the rest of the app uses one consistent value.
+ */
 export function validateEmail(value: string): AuthValidationResult<string> {
   const email = sanitizeAuthText(value, 254).toLowerCase();
   const errors: string[] = [];
@@ -39,6 +47,10 @@ export function validateEmail(value: string): AuthValidationResult<string> {
   return errors.length ? { ok: false, errors } : { ok: true, value: email };
 }
 
+/**
+ * Scores password strength for the UI progress bar.
+ * This does not replace Firebase/backend rules; it is immediate feedback before submit.
+ */
 export function analyzePassword(password: string): PasswordStrength {
   const missing: string[] = [];
 
@@ -72,6 +84,10 @@ export function analyzePassword(password: string): PasswordStrength {
   };
 }
 
+/**
+ * Enforces the frontend password policy before creating a Firebase account.
+ * The original password is returned only when it passes all checks.
+ */
 export function validatePassword(password: string): AuthValidationResult<string> {
   const errors: string[] = [];
   const strength = analyzePassword(password);
@@ -88,6 +104,10 @@ export function validatePassword(password: string): AuthValidationResult<string>
   return errors.length ? { ok: false, errors } : { ok: true, value: password };
 }
 
+/**
+ * Validates a display name and strips angle brackets to avoid rendering HTML-like text later.
+ * The backend still treats the final Firebase token/user identity as the source of truth.
+ */
 export function validateDisplayName(value: string): AuthValidationResult<string> {
   const displayName = sanitizeAuthText(value, 80).replace(/[<>]/g, "");
   const errors: string[] = [];

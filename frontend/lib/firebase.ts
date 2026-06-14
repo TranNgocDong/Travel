@@ -16,6 +16,10 @@ const firebaseConfig = {
 let firebaseApp: FirebaseApp | null = null;
 let firebaseAuth: Auth | null = null;
 
+/**
+ * Lazily creates and returns the browser Firebase Auth singleton.
+ * Keeping this behind a function avoids initializing Firebase during server rendering.
+ */
 export function getFirebaseAuth(): Auth {
   // Firebase Auth uses browser APIs, so this helper must not run during Next.js server rendering.
   if (typeof window === "undefined") {

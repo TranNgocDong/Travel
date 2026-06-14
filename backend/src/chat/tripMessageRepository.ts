@@ -26,11 +26,17 @@ export interface TripMessageRepository {
 export class InMemoryTripMessageRepository implements TripMessageRepository {
   private readonly messagesByTrip = new Map<string, TripMessage[]>();
 
+  /**
+   * Returns the latest in-memory chat messages for a trip.
+   */
   async listByTrip(tripId: string, limit = 50): Promise<TripMessage[]> {
     const messages = this.messagesByTrip.get(tripId) ?? [];
     return messages.slice(Math.max(0, messages.length - limit));
   }
 
+  /**
+   * Appends a chat message in memory for local/demo runs.
+   */
   async create(input: CreateTripMessageInput): Promise<TripMessage> {
     const message: TripMessage = {
       id: input.id,
@@ -49,6 +55,9 @@ export class InMemoryTripMessageRepository implements TripMessageRepository {
 export class PostgresTripMessageRepository implements TripMessageRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Loads recent chat messages in chronological order for the room window.
+   */
   async listByTrip(tripId: string, limit = 50): Promise<TripMessage[]> {
     const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
     const result = await this.pool.query<MessageRow>(
@@ -69,6 +78,9 @@ export class PostgresTripMessageRepository implements TripMessageRepository {
     return result.rows.map(rowToMessage);
   }
 
+  /**
+   * Persists a chat message to PostgreSQL.
+   */
   async create(input: CreateTripMessageInput): Promise<TripMessage> {
     const result = await this.pool.query<MessageRow>(
       `
@@ -92,6 +104,9 @@ interface MessageRow {
   created_at: Date | string;
 }
 
+/**
+ * Converts a PostgreSQL message row into the API chat model.
+ */
 function rowToMessage(row: MessageRow): TripMessage {
   return {
     id: row.id,

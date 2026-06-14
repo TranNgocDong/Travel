@@ -2,6 +2,10 @@ import { pathToFileURL } from "node:url";
 
 import { createPool } from "./config.js";
 
+/**
+ * Placeholder seed command for production-safe deployments. It verifies the
+ * database connection without inserting demo trips into real workspaces.
+ */
 export async function seedDemoData() {
   const pool = createPool();
 

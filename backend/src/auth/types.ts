@@ -22,6 +22,9 @@ export interface RefreshSession {
   revokedAt: Date | null;
 }
 
+/**
+ * Removes sensitive account fields before returning user data to the frontend.
+ */
 export function toSafeUser(user: UserAccount): SafeUser {
   return {
     id: user.id,

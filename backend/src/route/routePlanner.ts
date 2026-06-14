@@ -83,6 +83,9 @@ export class RoutePlannerError extends Error {
   }
 }
 
+/**
+ * Creates an empty route plan for a new trip before the user has planned a route.
+ */
 export function buildStarterRoutePlan(tripId: string, now = new Date()): RoutePlan {
   return {
     tripId,
@@ -104,6 +107,9 @@ export function buildStarterRoutePlan(tripId: string, now = new Date()): RoutePl
   };
 }
 
+/**
+ * Builds a real road route using free OpenStreetMap-based services.
+ */
 export async function buildOpenStreetRoutePlan(tripId: string, input: RouteBuildInput, now = new Date()): Promise<RoutePlan> {
   const originQuery = input.origin.trim();
   const destinationQuery = input.destination.trim();
@@ -157,6 +163,9 @@ export async function buildOpenStreetRoutePlan(tripId: string, input: RouteBuild
   };
 }
 
+/**
+ * Converts a GPS coordinate into a human-readable address.
+ */
 export async function reverseGeocodePoint(coordinate: GeoPoint): Promise<ReverseGeocodeResult> {
   if (!isValidGeoPoint(coordinate)) {
     throw new RoutePlannerError("INVALID_ROUTE_INPUT", "Tọa độ không hợp lệ");
@@ -185,6 +194,9 @@ export async function reverseGeocodePoint(coordinate: GeoPoint): Promise<Reverse
   };
 }
 
+/**
+ * Checks whether a value is a real latitude/longitude pair.
+ */
 function isValidGeoPoint(point: GeoPoint | undefined): point is GeoPoint {
   return (
     !!point &&
@@ -197,6 +209,9 @@ function isValidGeoPoint(point: GeoPoint | undefined): point is GeoPoint {
   );
 }
 
+/**
+ * Builds the small route summary shown in the cockpit header.
+ */
 export function summarizeRoute(waypoints: RouteWaypoint[]): RoutePlan["summary"] {
   const suggestedStops = waypoints.filter((waypoint) => waypoint.stop && waypoint.stop.priority !== "optional").length;
   const weatherAlerts = waypoints.filter((waypoint) => waypoint.weather.riskLevel !== "low").length;
@@ -213,6 +228,9 @@ export function summarizeRoute(waypoints: RouteWaypoint[]): RoutePlan["summary"]
   };
 }
 
+/**
+ * Creates the visible waypoint timeline from route geometry.
+ */
 export function createDynamicWaypoints(
   origin: GeocodedPlace,
   destination: GeocodedPlace,
@@ -342,6 +360,9 @@ interface OpenMeteoForecastResponse {
   };
 }
 
+/**
+ * Searches for a text place name and returns its coordinates.
+ */
 async function geocodePlace(query: string): Promise<GeocodedPlace> {
   const baseUrl = process.env.NOMINATIM_BASE_URL ?? "https://nominatim.openstreetmap.org";
   // Nominatim is the free fallback when Google Places is not configured.
@@ -369,6 +390,9 @@ async function geocodePlace(query: string): Promise<GeocodedPlace> {
   };
 }
 
+/**
+ * Wraps a known coordinate in the same shape as a geocoded search result.
+ */
 function createCoordinatePlace(coordinate: GeoPoint, label: string): GeocodedPlace {
   return {
     name: label,
@@ -377,6 +401,9 @@ function createCoordinatePlace(coordinate: GeoPoint, label: string): GeocodedPla
   };
 }
 
+/**
+ * Calls OSRM to get driving distance, duration, and road geometry.
+ */
 async function fetchOsrmRoute(origin: GeoPoint, destination: GeoPoint): Promise<OsrmRoute> {
   const baseUrl = process.env.OSRM_BASE_URL ?? "https://router.project-osrm.org";
   // OSRM expects lng,lat order, unlike the app's normal lat,lng shape.
@@ -404,6 +431,9 @@ async function fetchOsrmRoute(origin: GeoPoint, destination: GeoPoint): Promise<
   };
 }
 
+/**
+ * Adds weather data to each waypoint based on the approximate arrival time.
+ */
 async function enrichWaypointsWithWeather(waypoints: RouteWaypoint[], now: Date, totalDistanceKm: number, totalDurationMinutes: number): Promise<RouteWaypoint[]> {
   // Weather is fetched per waypoint using an ETA approximation.
   // If Open-Meteo fails for one waypoint, that waypoint falls back to a safe stub instead of breaking route planning.
@@ -425,6 +455,9 @@ async function enrichWaypointsWithWeather(waypoints: RouteWaypoint[], now: Date,
   }));
 }
 
+/**
+ * Fetches weather near a coordinate for the target ETA.
+ */
 async function fetchOpenMeteoWeather(coordinate: GeoPoint, targetTime: Date): Promise<RouteWeather> {
   const baseUrl = process.env.OPEN_METEO_BASE_URL ?? "https://api.open-meteo.com";
   // Open-Meteo needs no API key and is used for route-aware weather previews.
@@ -467,6 +500,9 @@ async function fetchOpenMeteoWeather(coordinate: GeoPoint, targetTime: Date): Pr
   };
 }
 
+/**
+ * Fetches JSON from an external provider with timeout and normalized route errors.
+ */
 async function fetchJson<T>(url: URL, fallbackCode: RoutePlannerError["code"]): Promise<T> {
   const controller = new AbortController();
   // External providers should not hang the backend forever.
@@ -498,10 +534,16 @@ async function fetchJson<T>(url: URL, fallbackCode: RoutePlannerError["code"]): 
   }
 }
 
+/**
+ * Identity helper used to keep waypoint object creation typed and explicit.
+ */
 function createRouteWaypoint(input: RouteWaypoint): RouteWaypoint {
   return input;
 }
 
+/**
+ * Picks the hourly weather entry closest to the waypoint ETA.
+ */
 function pickNearestHourlyWeather(hourly: OpenMeteoForecastResponse["hourly"], targetTime: Date): {
   time?: string;
   temperature_2m?: number;
@@ -578,6 +620,9 @@ function pickNearestHourlyWeather(hourly: OpenMeteoForecastResponse["hourly"], t
   return forecast;
 }
 
+/**
+ * Converts Open-Meteo weather codes into readable condition labels.
+ */
 function weatherCodeToCondition(code: number): string {
   if (code === 0) {
     return "Trời quang";
@@ -610,6 +655,9 @@ function weatherCodeToCondition(code: number): string {
   return "Thời tiết ổn định";
 }
 
+/**
+ * Converts weather values into a simple low/medium/high riding risk.
+ */
 function calculateWeatherRisk(code: number, rainChance: number, windKph: number, precipitationMm: number): RouteRiskLevel {
   if (code >= 95 || rainChance >= 75 || windKph >= 40 || precipitationMm >= 8) {
     return "high";
@@ -622,6 +670,9 @@ function calculateWeatherRisk(code: number, rainChance: number, windKph: number,
   return "low";
 }
 
+/**
+ * Creates the short weather advice shown on each route card.
+ */
 function createWeatherAdvisory(riskLevel: RouteRiskLevel, condition: string, rainChance: number, windKph: number, precipitationMm: number): string {
   if (riskLevel === "high") {
     return `Cân nhắc dừng nghỉ: ${condition.toLowerCase()}, mưa ${rainChance}%, gió ${windKph} km/h. Bọc đồ và giảm tốc độ.`;
@@ -638,6 +689,9 @@ function createWeatherAdvisory(riskLevel: RouteRiskLevel, condition: string, rai
   return "Điều kiện ổn, có thể tiếp tục chặng này.";
 }
 
+/**
+ * Rounds a number to one decimal place for compact weather display.
+ */
 function roundToOneDecimal(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -646,6 +700,9 @@ function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+/**
+ * Creates fallback weather when Open-Meteo is unavailable.
+ */
 function createWeatherStub(index: number): RouteWeather {
   const presets: RouteWeather[] = [
     {
@@ -680,6 +737,9 @@ function createWeatherStub(index: number): RouteWeather {
   return presets[index] ?? presets[0]!;
 }
 
+/**
+ * Creates a border-crossing checklist when the destination name suggests an international border.
+ */
 function createBorderChecklist(placeName: string): string[] {
   const normalized = placeName.toLowerCase();
   const borderKeywords = ["cua khau", "cửa khẩu", "border", "huu nghi", "hữu nghị", "mong cai", "móng cái", "lao bao", "lao bảo"];
@@ -691,6 +751,9 @@ function createBorderChecklist(placeName: string): string[] {
   return ["Passport", "Visa/permit nếu cần", "Đăng ký xe", "Bảo hiểm xe", "Tiền mặt địa phương dự phòng"];
 }
 
+/**
+ * Shortens a long geocoder display name for UI cards.
+ */
 function simplifyPlaceName(displayName: string): string {
   return displayName
     .split(",")
@@ -700,10 +763,16 @@ function simplifyPlaceName(displayName: string): string {
     .join(", ");
 }
 
+/**
+ * Estimates map/offline pack size from route distance.
+ */
 function estimateOfflinePackSize(distanceKm: number): number {
   return Math.max(48, Math.min(520, Math.round(distanceKm * 0.65)));
 }
 
+/**
+ * Formats minutes into a short Vietnamese duration label.
+ */
 function formatDuration(minutes: number): string {
   if (minutes < 60) {
     return `${minutes} phút`;

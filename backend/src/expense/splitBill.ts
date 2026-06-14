@@ -88,6 +88,9 @@ interface AllocationInput {
 
 const WEIGHT_SCALE = 10_000;
 
+/**
+ * Calculates balances and minimized settlements for all expenses in one trip.
+ */
 export function calculateSplitBill(input: {
   participants: Participant[];
   tripCurrency: CurrencyCode;
@@ -156,6 +159,9 @@ export function calculateSplitBill(input: {
   };
 }
 
+/**
+ * Converts one expense split definition into exact owed amounts per user.
+ */
 function calculateOwedAmounts(input: {
   totalMinor: bigint;
   split: ExpenseSplit;
@@ -238,6 +244,9 @@ function calculateOwedAmounts(input: {
   }
 }
 
+/**
+ * Splits a total amount proportionally by integer weights while preserving every minor unit.
+ */
 function allocateByWeights(totalMinor: bigint, allocations: AllocationInput[]): Array<{ userId: UserId; amountMinor: bigint }> {
   const duplicateUserId = findDuplicate(allocations.map((allocation) => allocation.userId));
 
@@ -287,6 +296,9 @@ function allocateByWeights(totalMinor: bigint, allocations: AllocationInput[]): 
     .sort((left, right) => left.userId.localeCompare(right.userId));
 }
 
+/**
+ * Turns final user balances into a short list of payments.
+ */
 function minimizeSettlements(balances: Array<[UserId, bigint]>, currency: CurrencyCode): Settlement[] {
   // Positive balances are people who should receive money.
   // Negative balances are people who should pay money.
@@ -340,6 +352,9 @@ function minimizeSettlements(balances: Array<[UserId, bigint]>, currency: Curren
   return settlements;
 }
 
+/**
+ * Converts a money input into the target currency's minor units.
+ */
 function convertToMinorUnits(input: {
   money: MoneyInput;
   targetCurrency: CurrencyCode;
@@ -364,11 +379,17 @@ function convertToMinorUnits(input: {
   return divideAndRoundHalfUp(numerator, denominator);
 }
 
+/**
+ * Converts a parsed decimal into integer minor units with half-up rounding.
+ */
 function decimalToMinorUnits(decimal: ParsedDecimal, minorUnit: number): bigint {
   const numerator = decimal.numerator * 10n ** BigInt(minorUnit);
   return divideAndRoundHalfUp(numerator, decimal.denominator);
 }
 
+/**
+ * Parses a strict positive decimal string into a rational representation.
+ */
 function parseDecimal(value: string, maxFractionDigits: number, label: string): ParsedDecimal {
   // Strict decimal parsing avoids accepting scientific notation, negative values, or locale commas.
   // That makes money validation predictable across browsers and regions.
@@ -395,12 +416,18 @@ function parseDecimal(value: string, maxFractionDigits: number, label: string): 
   };
 }
 
+/**
+ * Parses a percentage/share value into the internal fixed weight scale.
+ */
 function parseDecimalWeight(value: string, label: string): bigint {
   const decimal = parseDecimal(value, 4, label);
   const numerator = decimal.numerator * BigInt(WEIGHT_SCALE);
   return divideExactly(numerator, decimal.denominator, `${label} "${value}" cannot be represented with 4 decimals`);
 }
 
+/**
+ * Divides two integers and rounds half up.
+ */
 function divideAndRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
   if (denominator <= 0n) {
     throw new SplitBillError("INVALID_DENOMINATOR", "Denominator must be greater than zero");
@@ -409,6 +436,9 @@ function divideAndRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
   return (numerator * 2n + denominator) / (denominator * 2n);
 }
 
+/**
+ * Divides two integers and rejects non-exact results.
+ */
 function divideExactly(numerator: bigint, denominator: bigint, message: string): bigint {
   if (denominator <= 0n) {
     throw new SplitBillError("INVALID_DENOMINATOR", "Denominator must be greater than zero");
@@ -421,6 +451,9 @@ function divideExactly(numerator: bigint, denominator: bigint, message: string):
   return numerator / denominator;
 }
 
+/**
+ * Finds a direct or reverse FX rate for a currency pair.
+ */
 function findFxRate(fxRates: FxRate[], from: CurrencyCode, to: CurrencyCode): FxRate {
   const direct = fxRates.find((rate) => rate.from === from && rate.to === to);
 
@@ -441,6 +474,9 @@ function findFxRate(fxRates: FxRate[], from: CurrencyCode, to: CurrencyCode): Fx
   };
 }
 
+/**
+ * Inverts a decimal FX rate string.
+ */
 function invertDecimal(value: string): string {
   const decimal = parseDecimal(value, 12, "FX rate");
 
@@ -457,6 +493,9 @@ function invertDecimal(value: string): string {
   return fractionPart ? `${integerPart}.${fractionPart}` : integerPart.toString();
 }
 
+/**
+ * Ensures the participant list is non-empty and has no duplicate users.
+ */
 function assertUniqueParticipants(participants: Participant[]): void {
   assertNonEmpty(participants, "At least one participant is required");
 
@@ -467,12 +506,18 @@ function assertUniqueParticipants(participants: Participant[]): void {
   }
 }
 
+/**
+ * Ensures a user id belongs to this trip before money is assigned to them.
+ */
 function assertKnownUser(participantIds: Set<UserId>, userId: UserId, message: string): void {
   if (!participantIds.has(userId)) {
     throw new SplitBillError("UNKNOWN_USER", message);
   }
 }
 
+/**
+ * Looks up a currency definition and validates its minor-unit configuration.
+ */
 function assertCurrencyExists(currencies: Map<CurrencyCode, CurrencyDefinition>, code: CurrencyCode): CurrencyDefinition {
   const currency = currencies.get(code);
 
@@ -487,12 +532,18 @@ function assertCurrencyExists(currencies: Map<CurrencyCode, CurrencyDefinition>,
   return currency;
 }
 
+/**
+ * Throws when a required list is empty.
+ */
 function assertNonEmpty<T>(items: T[], message: string): void {
   if (items.length === 0) {
     throw new SplitBillError("EMPTY_LIST", message);
   }
 }
 
+/**
+ * Returns the first duplicate string in a list.
+ */
 function findDuplicate(items: string[]): string | null {
   const seen = new Set<string>();
 
@@ -507,6 +558,9 @@ function findDuplicate(items: string[]): string | null {
   return null;
 }
 
+/**
+ * Reads a user's balance or throws if the user was not initialized.
+ */
 function mustGetBalance(balances: Map<UserId, bigint>, userId: UserId): bigint {
   const balance = balances.get(userId);
 
@@ -517,6 +571,9 @@ function mustGetBalance(balances: Map<UserId, bigint>, userId: UserId): bigint {
   return balance;
 }
 
+/**
+ * Sorts debtors/creditors by largest amount first, then by user id for stable output.
+ */
 function sortByAmountDescThenUserId(
   left: { userId: UserId; amountMinor: bigint },
   right: { userId: UserId; amountMinor: bigint },

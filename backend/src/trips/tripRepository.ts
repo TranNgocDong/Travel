@@ -28,6 +28,9 @@ export class InMemoryTripRepository implements TripRepository {
   private readonly tripsById = new Map<string, Omit<TripSummary, "role">>();
   private readonly userTripRoles = new Map<string, Map<string, TripRole>>();
 
+  /**
+   * Lists trips linked to a user in memory, including the user's role.
+   */
   async listForUser(userId: string): Promise<TripSummary[]> {
     const rolesByTrip = this.userTripRoles.get(userId) ?? new Map<string, TripRole>();
 
@@ -40,10 +43,16 @@ export class InMemoryTripRepository implements TripRepository {
       .sort((left, right) => left.title.localeCompare(right.title));
   }
 
+  /**
+   * Finds an in-memory trip by id without membership role data.
+   */
   async findById(tripId: string): Promise<Omit<TripSummary, "role"> | null> {
     return this.tripsById.get(tripId) ?? null;
   }
 
+  /**
+   * Creates a new in-memory trip in active status.
+   */
   async create(input: { id: string; title: string; currency: string }): Promise<Omit<TripSummary, "role">> {
     const trip: Omit<TripSummary, "role"> = {
       id: input.id,
@@ -57,6 +66,9 @@ export class InMemoryTripRepository implements TripRepository {
     return trip;
   }
 
+  /**
+   * Updates in-memory trip lifecycle timestamps for active/completed/archived.
+   */
   async updateStatus(tripId: string, status: TripStatus): Promise<Omit<TripSummary, "role"> | null> {
     const trip = this.tripsById.get(tripId);
 
@@ -75,6 +87,9 @@ export class InMemoryTripRepository implements TripRepository {
     return updated;
   }
 
+  /**
+   * Deletes an in-memory trip and removes all role links to it.
+   */
   async delete(tripId: string): Promise<void> {
     this.tripsById.delete(tripId);
 
@@ -83,12 +98,18 @@ export class InMemoryTripRepository implements TripRepository {
     }
   }
 
+  /**
+   * Links a user to an in-memory trip with a role.
+   */
   async linkUser(tripId: string, userId: string, role: TripRole): Promise<void> {
     const current = this.userTripRoles.get(userId) ?? new Map<string, TripRole>();
     current.set(tripId, role);
     this.userTripRoles.set(userId, current);
   }
 
+  /**
+   * Removes a user's in-memory trip link.
+   */
   async unlinkUser(tripId: string, userId: string): Promise<void> {
     this.userTripRoles.get(userId)?.delete(tripId);
   }
@@ -97,6 +118,9 @@ export class InMemoryTripRepository implements TripRepository {
 export class PostgresTripRepository implements TripRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Lists trips where the user is an active participant.
+   */
   async listForUser(userId: string): Promise<TripSummary[]> {
     const result = await this.pool.query<TripRow>(
       `
@@ -115,6 +139,9 @@ export class PostgresTripRepository implements TripRepository {
     return result.rows.map(rowToTripSummary);
   }
 
+  /**
+   * Finds a trip by id without evaluating the caller's role.
+   */
   async findById(tripId: string): Promise<Omit<TripSummary, "role"> | null> {
     const result = await this.pool.query<TripRow>(
       `
@@ -129,6 +156,9 @@ export class PostgresTripRepository implements TripRepository {
     return trip ? rowToTrip(trip) : null;
   }
 
+  /**
+   * Creates a new persisted trip.
+   */
   async create(input: { id: string; title: string; currency: string }): Promise<Omit<TripSummary, "role">> {
     const result = await this.pool.query<TripRow>(
       `
@@ -143,6 +173,9 @@ export class PostgresTripRepository implements TripRepository {
     return rowToTrip(trip);
   }
 
+  /**
+   * Updates persisted trip lifecycle status and timestamp fields.
+   */
   async updateStatus(tripId: string, status: TripStatus): Promise<Omit<TripSummary, "role"> | null> {
     const result = await this.pool.query<TripRow>(
       `
@@ -166,14 +199,26 @@ export class PostgresTripRepository implements TripRepository {
     return result.rows[0] ? rowToTrip(result.rows[0]) : null;
   }
 
+  /**
+   * Deletes a persisted trip. Related rows are expected to be handled by
+   * database constraints/migrations.
+   */
   async delete(tripId: string): Promise<void> {
     await this.pool.query("DELETE FROM trips WHERE id = $1", [tripId]);
   }
 
+  /**
+   * No-op in PostgreSQL mode because trip membership is managed by the member
+   * repository, not this trip repository.
+   */
   async linkUser(_tripId: string, _userId: string, _role: TripRole): Promise<void> {
     return;
   }
 
+  /**
+   * No-op in PostgreSQL mode because membership removal is handled by the member
+   * repository.
+   */
   async unlinkUser(_tripId: string, _userId: string): Promise<void> {
     return;
   }
@@ -189,6 +234,9 @@ interface TripRow {
   archived_at: Date | string | null;
 }
 
+/**
+ * Converts a PostgreSQL trip row into a trip summary including role.
+ */
 function rowToTripSummary(row: TripRow): TripSummary {
   return {
     ...rowToTrip(row),
@@ -196,6 +244,9 @@ function rowToTripSummary(row: TripRow): TripSummary {
   };
 }
 
+/**
+ * Converts a PostgreSQL trip row into the role-free trip model.
+ */
 function rowToTrip(row: TripRow): Omit<TripSummary, "role"> {
   return {
     id: row.id,
@@ -207,6 +258,9 @@ function rowToTrip(row: TripRow): Omit<TripSummary, "role"> {
   };
 }
 
+/**
+ * Normalizes nullable date values from PostgreSQL into ISO strings.
+ */
 function formatNullableDate(value: Date | string | null): string | null {
   if (!value) {
     return null;

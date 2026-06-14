@@ -217,22 +217,37 @@ const vietnamSeaLabels = [
 
 type GoogleWindow = Window & { google?: typeof google };
 
+/**
+ * Returns the icon path for a saved/shared map marker.
+ */
 function mapMarkerIconPath(kind: ApiMapMarkerKind): string {
   return trailIconPath(kind);
 }
 
+/**
+ * Returns the icon path for a route POI.
+ */
 function poiIconPath(kind: ApiTripPoiKind): string {
   return trailIconPath(kind);
 }
 
+/**
+ * Builds a public asset path for a TrailLedger map icon.
+ */
 function trailIconPath(kind: TrailIconKind): string {
   return `${mapIconBasePath}/${kind}.svg`;
 }
 
+/**
+ * Normalizes free-form place text before matching or saving it.
+ */
 function normalizePlaceText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 
+/**
+ * Creates a stable local id for a saved place.
+ */
 function savedPlaceKey(label: string, coordinate?: ApiGeoPoint | null): string {
   const normalizedLabel = normalizePlaceText(label).toLowerCase();
 
@@ -243,6 +258,9 @@ function savedPlaceKey(label: string, coordinate?: ApiGeoPoint | null): string {
   return `geo:${coordinate.lat.toFixed(5)},${coordinate.lng.toFixed(5)}:${normalizedLabel}`;
 }
 
+/**
+ * Reads recent/saved places from localStorage.
+ */
 function readSavedPlaces(): SavedPlace[] {
   if (typeof window === "undefined") {
     return [];
@@ -269,6 +287,9 @@ function readSavedPlaces(): SavedPlace[] {
   }
 }
 
+/**
+ * Stores recent/saved places on the current browser.
+ */
 function writeSavedPlaces(places: SavedPlace[]) {
   if (typeof window === "undefined") {
     return;
@@ -281,6 +302,9 @@ function writeSavedPlaces(places: SavedPlace[]) {
   }
 }
 
+/**
+ * Inserts or updates a saved place and keeps the most useful places at the top.
+ */
 function mergeSavedPlace(current: SavedPlace[], nextPlace: Omit<SavedPlace, "id" | "lastUsedAt" | "useCount">): SavedPlace[] {
   const label = normalizePlaceText(nextPlace.label);
 
@@ -303,6 +327,9 @@ function mergeSavedPlace(current: SavedPlace[], nextPlace: Omit<SavedPlace, "id"
   return [mergedPlace, ...current.filter((place) => place.id !== id)].slice(0, maxSavedPlaces);
 }
 
+/**
+ * Converts a shared map marker into a saved-place suggestion.
+ */
 function savedPlaceFromMarker(marker: ApiMapMarker): SavedPlace {
   return {
     id: savedPlaceKey(marker.label, { lat: marker.latitude, lng: marker.longitude }),
@@ -315,6 +342,9 @@ function savedPlaceFromMarker(marker: ApiMapMarker): SavedPlace {
   };
 }
 
+/**
+ * Converts a POI near the route into a saved-place suggestion.
+ */
 function savedPlaceFromPoi(poi: ApiTripPoi): SavedPlace {
   return {
     id: savedPlaceKey(poi.name, { lat: poi.latitude, lng: poi.longitude }),
@@ -327,6 +357,9 @@ function savedPlaceFromPoi(poi: ApiTripPoi): SavedPlace {
   };
 }
 
+/**
+ * Filters and sorts place suggestions for origin/destination inputs.
+ */
 function buildPlaceSuggestions(query: string, places: SavedPlace[]): SavedPlace[] {
   const normalizedQuery = normalizePlaceText(query).toLowerCase();
 
@@ -348,6 +381,9 @@ function buildPlaceSuggestions(query: string, places: SavedPlace[]): SavedPlace[
     .slice(0, 6);
 }
 
+/**
+ * Returns the UI label for where a place suggestion came from.
+ */
 function placeSourceLabel(source: SavedPlaceSource): string {
   if (source === "recent") {
     return "Gần đây";
@@ -360,6 +396,9 @@ function placeSourceLabel(source: SavedPlaceSource): string {
   return "Gần tuyến";
 }
 
+/**
+ * Loads the Google Maps JavaScript SDK once when a public API key is configured.
+ */
 function loadGoogleMaps(): Promise<typeof google> {
   if (!googleMapsApiKey || typeof window === "undefined") {
     return Promise.reject(new Error("Google Maps API key is missing."));
@@ -410,10 +449,16 @@ function loadGoogleMaps(): Promise<typeof google> {
   return googleMapsLoaderPromise;
 }
 
+/**
+ * Renders an icon image for map markers, POIs, and member pins.
+ */
 function TrailMapIcon({ kind, className = "trail-map-icon" }: { kind: TrailIconKind; className?: string }) {
   return <img className={className} src={trailIconPath(kind)} alt="" aria-hidden="true" />;
 }
 
+/**
+ * Picks a stable route color from a user/route id.
+ */
 function memberRouteColor(seed: string): string {
   const palette = ["#7c3aed", "#f97316", "#0ea5e9", "#db2777", "#16a34a", "#d97706", "#0891b2"];
   let hash = 0;
@@ -425,6 +470,11 @@ function memberRouteColor(seed: string): string {
   return palette[hash % palette.length]!;
 }
 
+/**
+ * Main authenticated workspace for TrailLedger. It coordinates trip loading,
+ * map planning, group presence, expenses, chat, and recap state while delegating
+ * focused UI sections to smaller components below.
+ */
 export function ExpensePlanner() {
   // Main screen after authentication.
   // This component currently coordinates four product areas:
@@ -573,6 +623,9 @@ export function ExpensePlanner() {
     });
   }, []);
 
+  /**
+   * Applies a new route plan to the map, form fields, cache, and offline state.
+   */
   function applyRoutePlan(nextRoutePlan: ApiRoutePlan, options: { cache?: boolean; fromCache?: boolean; tripId?: string } = {}) {
     // A route plan update must keep the map, route form, cache, and offline status in sync.
     // routePlanSignatureRef prevents background refreshes from re-applying the same route and causing map jitter.
@@ -594,6 +647,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Refreshes the visible count of expenses waiting for offline sync.
+   */
   function refreshQueuedExpenseCount() {
     setQueuedExpenseCount(readQueuedExpenses().length);
   }
@@ -1163,6 +1219,9 @@ export function ExpensePlanner() {
     });
   }, [chatMessages, isChatOpen]);
 
+  /**
+   * Switches between light and dark mode and persists the preference locally.
+   */
   function toggleTheme() {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
@@ -1170,6 +1229,9 @@ export function ExpensePlanner() {
     document.documentElement.dataset.theme = nextTheme;
   }
 
+  /**
+   * Opens or closes the floating trip chat widget.
+   */
   function handleToggleChat() {
     const nextOpen = !isChatOpen;
     setIsChatOpen(nextOpen);
@@ -1185,6 +1247,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Sends a chat message after trimming and validating that the user is in an active trip.
+   */
   async function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1216,6 +1281,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Toggles whether a member is included in the current expense split.
+   */
   function toggleParticipant(memberId: string) {
     setParticipantIds((current) => {
       if (current.includes(memberId)) {
@@ -1226,6 +1294,9 @@ export function ExpensePlanner() {
     });
   }
 
+  /**
+   * Updates the percentage/share value for one split participant.
+   */
   function updateSplitValue(memberId: string, value: string) {
     setSplitValues((current) => ({
       ...current,
@@ -1233,6 +1304,9 @@ export function ExpensePlanner() {
     }));
   }
 
+  /**
+   * Stops the browser geolocation watcher used for sharing GPS.
+   */
   function clearLocationShareWatch() {
     // watchPosition keeps running in the browser until it is explicitly cleared.
     // Always clear it on stop/logout/unmount so the app does not keep sending GPS in the background.
@@ -1243,6 +1317,9 @@ export function ExpensePlanner() {
     locationShareWatchIdRef.current = null;
   }
 
+  /**
+   * Starts sharing the current browser GPS position with the trip.
+   */
   function handleStartSharingLocation() {
     if (!currentUser || !selectedTripId) {
       return;
@@ -1311,6 +1388,9 @@ export function ExpensePlanner() {
     );
   }
 
+  /**
+   * Stops local GPS sharing and optionally tells the backend to remove the live point.
+   */
   async function handleStopSharingLocation(options: { notifyServer?: boolean } = {}) {
     const shouldNotifyServer = options.notifyServer ?? true;
     const tripIdToStop = selectedTripId;
@@ -1334,6 +1414,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Creates an expense or queues it locally when the app is offline.
+   */
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1403,18 +1486,27 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Updates the route origin text and marks the route form as user-edited.
+   */
   function handleRouteOriginChange(value: string) {
     routeFormDirtyRef.current = true;
     setRouteOrigin(value);
     setRouteOriginCoordinate(null);
   }
 
+  /**
+   * Updates the route destination text and marks the route form as user-edited.
+   */
   function handleRouteDestinationChange(value: string) {
     routeFormDirtyRef.current = true;
     setRouteDestination(value);
     setRouteDestinationCoordinate(null);
   }
 
+  /**
+   * Uses a saved place suggestion as the route origin.
+   */
   function handleOriginPlaceSelect(place: SavedPlace) {
     routeFormDirtyRef.current = true;
     setRouteOrigin(place.label);
@@ -1427,6 +1519,9 @@ export function ExpensePlanner() {
     });
   }
 
+  /**
+   * Uses a saved place suggestion as the route destination.
+   */
   function handleDestinationPlaceSelect(place: SavedPlace) {
     routeFormDirtyRef.current = true;
     setRouteDestination(place.label);
@@ -1439,6 +1534,9 @@ export function ExpensePlanner() {
     });
   }
 
+  /**
+   * Requests a new route plan from the current origin/destination form values.
+   */
   async function handlePlanRoute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1479,6 +1577,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Plans a route from the browser's current GPS position to the selected destination.
+   */
   async function handlePlanRouteFromCurrentLocation() {
     if (!routeDestination.trim() || isPlanningRoute || isUsingCurrentLocation) {
       return;
@@ -1527,6 +1628,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Saves the current route as the current member's personal route layer.
+   */
   async function handleSaveOwnerRoute() {
     if (!canCreateMemberRoute) {
       setApiError("Bạn cần là thành viên trong phòng để lưu tuyến riêng.");
@@ -1558,6 +1662,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Deletes a personal route layer when the user has permission.
+   */
   async function handleDeleteMemberRoute(route: ApiMemberRoute) {
     if (route.userId !== currentUser?.id && currentTripRole !== "owner") {
       setApiError("Bạn không thể xóa tuyến riêng của người khác.");
@@ -1577,10 +1684,16 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Shows or hides a member route layer on this user's map.
+   */
   function handleToggleMemberRoute(routeId: string) {
     setVisibleMemberRouteIds((current) => (current.includes(routeId) ? current.filter((id) => id !== routeId) : [...current, routeId]));
   }
 
+  /**
+   * Plans a route from my current GPS location to another member's shared GPS point.
+   */
   async function handlePlanRouteToMember(location: ApiMemberLocation) {
     if (isPlanningRoute || isUsingCurrentLocation) {
       return;
@@ -1646,10 +1759,16 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Selects a member in the presence panel for quick actions.
+   */
   function handleSelectPresenceUser(userId: string) {
     setSelectedPresenceUserId((current) => (current === userId ? null : userId));
   }
 
+  /**
+   * Requests the map to pan/zoom to a member's latest shared location.
+   */
   function handleFocusMemberLocation(location: ApiMemberLocation) {
     setFocusedLocationRequest({
       userId: location.userId,
@@ -1658,6 +1777,9 @@ export function ExpensePlanner() {
     setActiveTab("route");
   }
 
+  /**
+   * Resolves a member's GPS coordinate into a readable address.
+   */
   async function handleResolveMemberAddress(location: ApiMemberLocation) {
     setIsResolvingAddressFor(location.userId);
     setApiError(null);
@@ -1675,17 +1797,26 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Enables or disables "tap on map to choose marker position" mode.
+   */
   function handleToggleMapMarkerPlacement() {
     setIsPlacingMapMarker((current) => !current);
     setPendingMapMarker(null);
   }
 
+  /**
+   * Stores the coordinate selected from the map for the marker form.
+   */
   function handleMapMarkerPointSelected(point: ApiGeoPoint) {
     setPendingMapMarker(point);
     setIsPlacingMapMarker(false);
     setMapMarkerLabel((current) => current || mapMarkerKindLabel(mapMarkerKind));
   }
 
+  /**
+   * Creates a shared map marker at the selected coordinate.
+   */
   async function handleCreateMapMarker(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1713,6 +1844,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Deletes a shared map marker from the current trip.
+   */
   async function handleDeleteMapMarker(marker: ApiMapMarker) {
     if (deletingMapMarkerId) {
       return;
@@ -1731,6 +1865,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Plans a route from current GPS to a saved/shared map marker.
+   */
   async function handlePlanRouteToMapMarker(marker: ApiMapMarker) {
     if (isPlanningRoute || isUsingCurrentLocation) {
       return;
@@ -1783,6 +1920,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Toggles which POI categories should be shown near the route.
+   */
   function handleTogglePoiKind(kind: ApiTripPoiKind) {
     setSelectedPoiKinds((current) => {
       if (current.includes(kind)) {
@@ -1793,6 +1933,9 @@ export function ExpensePlanner() {
     });
   }
 
+  /**
+   * Plans a route from current GPS to a selected POI.
+   */
   async function handlePlanRouteToPoi(poi: ApiTripPoi) {
     if (isPlanningRoute || isUsingCurrentLocation) {
       return;
@@ -1845,6 +1988,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Saves a route POI as a persistent shared map marker.
+   */
   async function handleSavePoiAsMarker(poi: ApiTripPoi) {
     if (isSavingMapMarker) {
       return;
@@ -1868,6 +2014,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Updates the current trip lifecycle status.
+   */
   async function handleUpdateTripStatus(status: ApiTripStatus) {
     if (!activeTrip || isUpdatingTripStatus) {
       return;
@@ -1888,6 +2037,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Deletes the current trip after user confirmation.
+   */
   async function handleDeleteTrip() {
     if (!activeTrip || isDeletingTrip) {
       return;
@@ -1919,6 +2071,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Switches the cockpit to another trip workspace.
+   */
   function handleTripChange(nextTripId: string) {
     if (isSharingLocation) {
       void handleStopSharingLocation();
@@ -1954,6 +2109,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Creates a new trip from the trip manager form.
+   */
   async function handleCreateTrip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1980,20 +2138,32 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Manually starts syncing offline queued expenses.
+   */
   function handleSyncQueuedExpenses() {
     void syncQueuedExpenses();
   }
 
+  /**
+   * Manually refreshes the current trip data.
+   */
   function handleRefreshTripData() {
     void loadTripData({ silent: true });
   }
 
+  /**
+   * Changes the active mobile cockpit tab.
+   */
   function handleSelectTab(tab: MobileTab) {
     setActiveTab(tab);
     setIsAppRailOpen(false);
     setIsAppRailMinimized(false);
   }
 
+  /**
+   * Opens or closes the floating navigation rail.
+   */
   function handleToggleAppRail() {
     if (isAppRailMinimized) {
       setIsAppRailMinimized(false);
@@ -2004,15 +2174,24 @@ export function ExpensePlanner() {
     setIsAppRailOpen((current) => !current);
   }
 
+  /**
+   * Minimizes the floating navigation rail into a small handle.
+   */
   function handleMinimizeAppRail() {
     setIsAppRailOpen(false);
     setIsAppRailMinimized(true);
   }
 
+  /**
+   * Moves the floating navigation rail between left and right sides.
+   */
   function handleMoveAppRail() {
     setAppRailSide((current) => (current === "left" ? "right" : "left"));
   }
 
+  /**
+   * Logs the user out and stops local/live GPS sharing.
+   */
   async function handleLogout() {
     await handleStopSharingLocation();
     await logout();
@@ -2032,6 +2211,9 @@ export function ExpensePlanner() {
     setLastSyncedAt(null);
   }
 
+  /**
+   * Adds or invites a member to the current trip.
+   */
   async function handleAddMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -2057,6 +2239,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Changes a member role when the current user has owner permissions.
+   */
   async function handleRoleChange(memberId: string, role: ApiTripRole) {
     setApiError(null);
 
@@ -2068,6 +2253,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Removes a member from the current trip room.
+   */
   async function handleRemoveMember(memberId: string) {
     setApiError(null);
 
@@ -2079,6 +2267,9 @@ export function ExpensePlanner() {
     }
   }
 
+  /**
+   * Updates one field in the current user's editable profile draft.
+   */
   function updateProfileDraft<K extends keyof MemberProfileDraft>(key: K, value: MemberProfileDraft[K]) {
     setProfileDraft((current) => ({
       ...current,
@@ -2086,6 +2277,9 @@ export function ExpensePlanner() {
     }));
   }
 
+  /**
+   * Saves the current user's profile fields to the backend.
+   */
   async function handleSaveMemberProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -2624,6 +2818,11 @@ export function ExpensePlanner() {
   );
 }
 
+/**
+ * Shows the current trip status and owner-only lifecycle actions such as finish,
+ * archive, reopen, or delete. Keeping this separate from the main planner makes
+ * it easier to reason about destructive trip actions.
+ */
 function TripLifecyclePanel({
   canManage,
   expenses,
@@ -2693,6 +2892,11 @@ function TripLifecyclePanel({
   );
 }
 
+/**
+ * Builds the post-trip summary view from already-loaded route, expense, member,
+ * marker, and POI data. It is intentionally read-only so recap UI cannot mutate
+ * trip state by accident.
+ */
 function TripRecapPanel({
   balances,
   expenses,
@@ -2798,6 +3002,11 @@ function TripRecapPanel({
   );
 }
 
+/**
+ * Renders the floating group chat bubble and compact message window. Chat stays
+ * decoupled from the main panels so riders can keep the map visible while
+ * coordinating quick messages.
+ */
 function ChatDock({
   currentUserId,
   draft,
@@ -2879,6 +3088,11 @@ function ChatDock({
   );
 }
 
+/**
+ * Lets the current user edit the lightweight profile shown inside a trip room.
+ * Only simple, trip-specific fields live here so account identity and Firebase
+ * authentication remain separated from social/profile presentation.
+ */
 function MemberProfilePanel({
   draft,
   isSaving,
@@ -2998,6 +3212,11 @@ function MemberProfilePanel({
   );
 }
 
+/**
+ * Lists who is currently online in the trip and exposes quick rider actions:
+ * focus on map, route to that member, resolve address, or call when a phone
+ * number is available.
+ */
 function PresencePanel({
   currentUserId,
   isPlanningRoute,
@@ -3125,6 +3344,11 @@ function PresencePanel({
   );
 }
 
+/**
+ * Presents the split-bill result in human language: who should pay whom and
+ * each member's net balance. The calculation itself stays in the backend; this
+ * component only formats the returned settlement model.
+ */
 function SettlementPanel({
   balances,
   members,
@@ -3179,6 +3403,11 @@ function SettlementPanel({
   );
 }
 
+/**
+ * Owner/editor-facing member management panel. It renders add, role-change,
+ * and soft-remove controls while respecting the permission flags computed by
+ * the authenticated trip membership state.
+ */
 function MemberManagerPanel({
   canManageTripMembers,
   currentTripRole,
@@ -3287,6 +3516,11 @@ function MemberManagerPanel({
   );
 }
 
+/**
+ * Shows locally saved/recent place suggestions below route inputs. Suggestions
+ * are intentionally local-first so riders can quickly reuse places even before
+ * external search providers return results.
+ */
 function PlaceSuggestionList({ suggestions, onSelect }: { suggestions: SavedPlace[]; onSelect: (place: SavedPlace) => void }) {
   if (!suggestions.length) {
     return null;
@@ -3308,6 +3542,11 @@ function PlaceSuggestionList({ suggestions, onSelect }: { suggestions: SavedPlac
   );
 }
 
+/**
+ * Map-first cockpit for planning, riding, POI filters, saved markers, and member
+ * routes. This component owns only the UI state for fullscreen/ride mode and the
+ * mobile bottom sheet; data mutations are passed in through callbacks.
+ */
 function RouteIntelligence({
   canManageMemberRoutes,
   canCreateMemberRoute,
@@ -3417,11 +3656,19 @@ function RouteIntelligence({
   const touchStartY = useRef<number>(0);
   const didSheetSwipe = useRef(false);
 
+  /**
+   * Stores the first touch Y position so the bottom sheet can decide whether a
+   * swipe should expand or collapse it.
+   */
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     touchStartY.current = e.touches[0]?.clientY ?? 0;
     didSheetSwipe.current = false;
   };
 
+  /**
+   * Converts a vertical swipe into one of the three bottom-sheet states. The
+   * threshold avoids accidental state changes while the user scrolls content.
+   */
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     const touchEndY = e.changedTouches[0]?.clientY ?? 0;
     const diffY = touchEndY - touchStartY.current;
@@ -3443,6 +3690,10 @@ function RouteIntelligence({
     }
   };
 
+  /**
+   * Cycles the bottom sheet through collapsed, half, and expanded when the grab
+   * handle is tapped instead of swiped.
+   */
   const handleHandleClick = () => {
     if (didSheetSwipe.current) {
       didSheetSwipe.current = false;
@@ -3466,6 +3717,10 @@ function RouteIntelligence({
   const destinationSuggestions = buildPlaceSuggestions(destination, placeSuggestions);
   const recentPlaceShortcuts = placeSuggestions.filter((place) => place.source === "recent").slice(0, 4);
 
+  /**
+   * Toggles the simplified riding view. Ride mode also forces fullscreen map so
+   * navigation controls stay large and the surrounding dashboard stays hidden.
+   */
   function handleRideModeToggle() {
     setIsRideMode((current) => {
       const next = !current;
@@ -3474,6 +3729,10 @@ function RouteIntelligence({
     });
   }
 
+  /**
+   * Opens or closes the map-only layout. Leaving fullscreen also disables ride
+   * mode because ride controls depend on the expanded map canvas.
+   */
   function handleMapFullscreenToggle() {
     setIsMapFullscreen((current) => {
       const next = !current;
@@ -3916,6 +4175,11 @@ type RouteMapProps = {
   routePlan: ApiRoutePlan;
 };
 
+/**
+ * Chooses the available map provider for the route cockpit. Google Maps is used
+ * only when configured; otherwise the OpenStreetMap fallback keeps the app
+ * usable without paid map keys.
+ */
 function RouteMap(props: RouteMapProps) {
   // Google Maps is used only when a public API key is configured.
   // Otherwise the app falls back to Leaflet/OpenStreetMap so the product still works on free hosting.
@@ -3926,6 +4190,11 @@ function RouteMap(props: RouteMapProps) {
   return <OpenStreetRouteMap {...props} />;
 }
 
+/**
+ * Google Maps implementation of the route cockpit. It handles provider-specific
+ * overlays, Places search, and map resizing while the parent component keeps the
+ * provider-independent trip state.
+ */
 function GoogleRouteMap({
   currentUserId,
   focusedLocationRequest,
@@ -4243,6 +4512,11 @@ function GoogleRouteMap({
   );
 }
 
+/**
+ * Leaflet/OpenStreetMap implementation of the route cockpit. This is the free
+ * fallback path and includes route polylines, member locations, saved markers,
+ * POIs, and live GPS following.
+ */
 function OpenStreetRouteMap({
   currentUserId,
   focusedLocationRequest,
@@ -4865,6 +5139,10 @@ function OpenStreetRouteMap({
   );
 }
 
+/**
+ * Renders one waypoint in the Strava-like trip timeline with weather, stop, and
+ * border checklist context.
+ */
 function WaypointCard({ waypoint }: { waypoint: ApiRouteWaypoint }) {
   return (
     <article className={`waypoint-card risk-${waypoint.weather.riskLevel}`}>
@@ -4907,6 +5185,9 @@ function WaypointCard({ waypoint }: { waypoint: ApiRouteWaypoint }) {
   );
 }
 
+/**
+ * Compact label/value metric used in recap panels where dense scanning matters.
+ */
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -4916,6 +5197,9 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Dashboard summary tile used for high-level trip stats.
+ */
 function SummaryTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="summary-tile">
@@ -4928,6 +5212,10 @@ function SummaryTile({ icon, label, value }: { icon: React.ReactNode; label: str
   );
 }
 
+/**
+ * Displays a consistent member avatar from either the lightweight fallback
+ * member type or the richer trip member profile type.
+ */
 function Avatar({ member }: { member: Member | TripMemberView }) {
   const avatarColor = "avatarColor" in member ? member.avatarColor : "teal";
   const statusEmoji = "statusEmoji" in member ? member.statusEmoji : "";
@@ -4940,6 +5228,10 @@ function Avatar({ member }: { member: Member | TripMemberView }) {
   );
 }
 
+/**
+ * Converts the internal split mode enum into the short label used in segmented
+ * controls.
+ */
 function modeLabel(mode: SplitMode): string {
   if (mode === "percent") {
     return "%";
@@ -4952,6 +5244,9 @@ function modeLabel(mode: SplitMode): string {
   return "Đều";
 }
 
+/**
+ * Formats local sync timestamps without seconds to reduce visual noise.
+ */
 function formatSyncTime(date: Date): string {
   return new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",
@@ -4959,6 +5254,10 @@ function formatSyncTime(date: Date): string {
   }).format(date);
 }
 
+/**
+ * Safely formats chat timestamps and falls back to "just now" for optimistic
+ * or malformed local messages.
+ */
 function formatChatTime(value: string): string {
   const date = new Date(value);
 
@@ -4972,6 +5271,10 @@ function formatChatTime(value: string): string {
   }).format(date);
 }
 
+/**
+ * Merges chat messages by id so reconnects and live sync retries do not render
+ * duplicate messages.
+ */
 function appendUniqueMessages(current: ApiTripMessage[], nextMessages: ApiTripMessage[]): ApiTripMessage[] {
   const seen = new Set(current.map((message) => message.id));
   const merged = [...current];
@@ -4986,6 +5289,9 @@ function appendUniqueMessages(current: ApiTripMessage[], nextMessages: ApiTripMe
   return merged.sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
 }
 
+/**
+ * Converts server-sent live event types into short notification text.
+ */
 function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
   if (type === "expense_created") {
     return "có chi phí mới";
@@ -5022,10 +5328,16 @@ function liveEventLabel(type: ApiTripLiveEvent["type"]): string {
   return "tuyến vừa đổi";
 }
 
+/**
+ * Returns the active CSS class for mobile tab buttons.
+ */
 function tabButtonClass(activeTab: MobileTab, tab: MobileTab): string {
   return activeTab === tab ? "active" : "";
 }
 
+/**
+ * Maps the internal mobile tab id to the label shown in the app navigation.
+ */
 function navTabLabel(tab: MobileTab): string {
   if (tab === "expenses") {
     return "Chi phí";
@@ -5042,6 +5354,9 @@ function navTabLabel(tab: MobileTab): string {
   return "Bản đồ";
 }
 
+/**
+ * Converts RBAC roles into human-readable room labels.
+ */
 function roleLabel(role: ApiTripRole): string {
   if (role === "owner") {
     return "Chủ phòng";
@@ -5054,6 +5369,9 @@ function roleLabel(role: ApiTripRole): string {
   return "Chỉ xem";
 }
 
+/**
+ * Builds the class list for the draggable/collapsible app navigation rail.
+ */
 function appNavRailClass(isOpen: boolean, isMinimized: boolean, side: "left" | "right"): string {
   return [
     "app-nav-rail",
@@ -5065,6 +5383,10 @@ function appNavRailClass(isOpen: boolean, isMinimized: boolean, side: "left" | "
     .join(" ");
 }
 
+/**
+ * Translates the expense form state into the API split model. Keeping this
+ * conversion centralized avoids sending mismatched split payloads to the server.
+ */
 function buildSplitPayload(splitMode: SplitMode, selectedMemberIds: string[], values: Record<string, string>): ApiExpenseSplit {
   if (splitMode === "equal") {
     return {
@@ -5092,6 +5414,9 @@ function buildSplitPayload(splitMode: SplitMode, selectedMemberIds: string[], va
   };
 }
 
+/**
+ * Counts how many members participate in an expense regardless of split mode.
+ */
 function participantCount(expense: ApiExpense): number {
   if (expense.split.type === "equal") {
     return expense.split.userIds.length;
@@ -5100,6 +5425,10 @@ function participantCount(expense: ApiExpense): number {
   return expense.split.shares.length;
 }
 
+/**
+ * Converts the backend trip member record into the UI-friendly member view with
+ * avatar defaults and display fallbacks.
+ */
 function mapTripMember(member: ApiTripMember): TripMemberView {
   const travelStatus = member.travelStatus ?? "riding";
 
@@ -5119,6 +5448,9 @@ function mapTripMember(member: ApiTripMember): TripMemberView {
   };
 }
 
+/**
+ * Seeds the editable profile form from the current member view.
+ */
 function memberToProfileDraft(member: TripMemberView): MemberProfileDraft {
   return {
     displayName: member.name,
@@ -5131,14 +5463,24 @@ function memberToProfileDraft(member: TripMemberView): MemberProfileDraft {
   };
 }
 
+/**
+ * Looks up the label for a member travel status.
+ */
 function travelStatusLabel(status: ApiTripMemberTravelStatus): string {
   return travelStatusOptions.find((option) => option.id === status)?.label ?? "Đang chạy";
 }
 
+/**
+ * Looks up the emoji for a member travel status, with a safe riding fallback.
+ */
 function travelStatusEmoji(status: ApiTripMemberTravelStatus): string {
   return travelStatusOptions.find((option) => option.id === status)?.emoji ?? "🛵";
 }
 
+/**
+ * Sanitizes a phone number before exposing it as a tel: link. Short or invalid
+ * values return null so the UI does not create unusable call buttons.
+ */
 function safeTelHref(value: string | null | undefined): string | null {
   const normalized = (value ?? "").replace(/[^\d+]/g, "");
 
@@ -5149,10 +5491,16 @@ function safeTelHref(value: string | null | undefined): string | null {
   return `tel:${normalized}`;
 }
 
+/**
+ * Builds an external Google Maps search URL for fallback place lookups.
+ */
 function googleMapsSearchUrl(query: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim())}`;
 }
 
+/**
+ * Creates two-character initials for avatar fallbacks.
+ */
 function createInitials(name: string): string {
   return name
     .split(/\s+/)
@@ -5163,10 +5511,16 @@ function createInitials(name: string): string {
     .padEnd(2, "?");
 }
 
+/**
+ * Creates initials for map location markers.
+ */
 function createLocationInitials(name: string): string {
   return createInitials(name).slice(0, 2);
 }
 
+/**
+ * Formats GPS/presence timestamps for compact presence rows.
+ */
 function formatLocationTime(value: string): string {
   const date = new Date(value);
 
@@ -5180,6 +5534,9 @@ function formatLocationTime(value: string): string {
   }).format(date);
 }
 
+/**
+ * Formats full date/time labels for trip lifecycle and recap screens.
+ */
 function formatDateTime(value: string): string {
   const date = new Date(value);
 
@@ -5196,6 +5553,9 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
+/**
+ * Converts a duration in minutes into a short Vietnamese hour/minute label.
+ */
 function formatDuration(minutes: number): string {
   if (!minutes) {
     return "0 giờ";
@@ -5206,6 +5566,9 @@ function formatDuration(minutes: number): string {
   return rest ? `${hours} giờ ${rest} phút` : `${hours} giờ`;
 }
 
+/**
+ * Converts trip lifecycle status into user-facing text.
+ */
 function tripStatusLabel(status: ApiTripStatus): string {
   if (status === "completed") {
     return "Đã kết thúc";
@@ -5218,6 +5581,9 @@ function tripStatusLabel(status: ApiTripStatus): string {
   return "Đang đi";
 }
 
+/**
+ * Aggregates expenses by category for the trip recap card.
+ */
 function summarizeExpensesByCategory(expenses: ApiExpense[]): Array<{ category: string; total: number }> {
   const totals = new globalThis.Map<string, number>();
 
@@ -5230,6 +5596,9 @@ function summarizeExpensesByCategory(expenses: ApiExpense[]): Array<{ category: 
     .sort((left, right) => right.total - left.total);
 }
 
+/**
+ * Counts saved map markers by kind for recap summaries.
+ */
 function summarizeMapMarkers(markers: ApiMapMarker[]): Array<{ kind: ApiMapMarkerKind; count: number }> {
   const totals = new globalThis.Map<ApiMapMarkerKind, number>();
 
@@ -5240,10 +5609,16 @@ function summarizeMapMarkers(markers: ApiMapMarker[]): Array<{ kind: ApiMapMarke
   return [...totals.entries()].map(([kind, count]) => ({ kind, count }));
 }
 
+/**
+ * Resolves an expense category id to the configured UI label.
+ */
 function expenseCategoryLabel(category: string): string {
   return categories.find((item) => item.id === category)?.label ?? category;
 }
 
+/**
+ * Resolves saved map marker types to labels used in markers and recaps.
+ */
 function mapMarkerKindLabel(kind: ApiMapMarkerKind): string {
   if (kind === "meetup") {
     return "Hẹn gặp";
@@ -5272,6 +5647,9 @@ function mapMarkerKindLabel(kind: ApiMapMarkerKind): string {
   return "Ping";
 }
 
+/**
+ * Resolves POI provider kinds to rider-friendly labels.
+ */
 function poiKindLabel(kind: ApiTripPoiKind): string {
   if (kind === "fuel") {
     return "Cây xăng";
@@ -5284,6 +5662,10 @@ function poiKindLabel(kind: ApiTripPoiKind): string {
   return "Quán ăn";
 }
 
+/**
+ * Escapes HTML before injecting marker labels into Leaflet popup strings. This
+ * prevents saved marker names from becoming executable HTML.
+ */
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -5293,10 +5675,18 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Finds a member by id and returns a stable fallback when old expenses reference
+ * a removed or unknown user.
+ */
 function findMember(members: TripMemberView[], memberId: string): Member {
   return members.find((member) => member.id === memberId) ?? { id: memberId, name: "Unknown", initials: "??" };
 }
 
+/**
+ * Adds a failed/offline expense mutation to the local queue without duplicating
+ * an existing optimistic mutation id.
+ */
 function enqueueExpense(item: OfflineExpenseQueueItem) {
   const current = readQueuedExpenses();
 
@@ -5307,6 +5697,9 @@ function enqueueExpense(item: OfflineExpenseQueueItem) {
   writeQueuedExpenses([...current, item]);
 }
 
+/**
+ * Reads and validates the offline expense queue from localStorage.
+ */
 function readQueuedExpenses(): OfflineExpenseQueueItem[] {
   if (typeof window === "undefined") {
     return [];
@@ -5326,6 +5719,9 @@ function readQueuedExpenses(): OfflineExpenseQueueItem[] {
   }
 }
 
+/**
+ * Persists the offline expense queue for later sync.
+ */
 function writeQueuedExpenses(items: OfflineExpenseQueueItem[]) {
   if (typeof window === "undefined") {
     return;
@@ -5334,6 +5730,10 @@ function writeQueuedExpenses(items: OfflineExpenseQueueItem[]) {
   window.localStorage.setItem(expenseQueueCacheKey(), JSON.stringify(items));
 }
 
+/**
+ * Converts a queued offline expense into an optimistic expense row so the UI can
+ * show the item immediately while sync is pending.
+ */
 function queuedExpenseToApiExpense(item: OfflineExpenseQueueItem): ApiExpense {
   return {
     id: item.id,
@@ -5349,6 +5749,10 @@ function queuedExpenseToApiExpense(item: OfflineExpenseQueueItem): ApiExpense {
   };
 }
 
+/**
+ * Decides whether a create-expense failure should be treated as temporary
+ * network loss and queued for retry.
+ */
 function shouldQueueExpense(error: unknown): boolean {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
     return true;
@@ -5361,12 +5765,18 @@ function shouldQueueExpense(error: unknown): boolean {
   return /failed to fetch|network|load failed|fetch/i.test(error.message);
 }
 
+/**
+ * Creates a client-side mutation id for optimistic/offline expense writes.
+ */
 function createClientMutationId(): string {
   const cryptoApi = typeof crypto !== "undefined" ? crypto : null;
   const id = cryptoApi?.randomUUID ? cryptoApi.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `expense_${id}`;
 }
 
+/**
+ * Runtime guard for values loaded from the offline expense queue.
+ */
 function isQueuedExpense(value: unknown): value is OfflineExpenseQueueItem {
   if (!value || typeof value !== "object") {
     return false;
@@ -5376,6 +5786,9 @@ function isQueuedExpense(value: unknown): value is OfflineExpenseQueueItem {
   return typeof item.id === "string" && typeof item.tripId === "string" && typeof item.createdAt === "string" && isExpensePayload(item.payload);
 }
 
+/**
+ * Runtime guard for queued expense payloads before replaying them to the API.
+ */
 function isExpensePayload(value: unknown): value is ApiCreateExpensePayload {
   if (!value || typeof value !== "object") {
     return false;
@@ -5392,10 +5805,16 @@ function isExpensePayload(value: unknown): value is ApiCreateExpensePayload {
   );
 }
 
+/**
+ * Returns the localStorage key for offline expenses.
+ */
 function expenseQueueCacheKey(): string {
   return "trail-ledger-offline-expense-queue";
 }
 
+/**
+ * Reads a cached route plan for the active trip and normalizes it before use.
+ */
 function readCachedRoutePlan(activeTripId: string): ApiRoutePlan | null {
   if (typeof window === "undefined") {
     return null;
@@ -5415,6 +5834,9 @@ function readCachedRoutePlan(activeTripId: string): ApiRoutePlan | null {
   }
 }
 
+/**
+ * Caches the latest route plan so the map can reopen quickly after refreshes.
+ */
 function writeCachedRoutePlan(routePlan: ApiRoutePlan, activeTripId: string) {
   if (typeof window === "undefined") {
     return;
@@ -5431,6 +5853,10 @@ function writeCachedRoutePlan(routePlan: ApiRoutePlan, activeTripId: string) {
   );
 }
 
+/**
+ * Builds a stable signature for route plans so effects can detect meaningful
+ * route changes without relying on object identity.
+ */
 function routePlanSignature(routePlan: ApiRoutePlan): string {
   const geometryPoints = routePlan.geometry.length ? routePlan.geometry : routePlan.waypoints.map((waypoint) => waypoint.coordinate);
   const geometrySignature = geometryPoints.map((point) => `${point.lat.toFixed(5)},${point.lng.toFixed(5)}`).join("|");
@@ -5447,14 +5873,23 @@ function routePlanSignature(routePlan: ApiRoutePlan): string {
   ].join("::");
 }
 
+/**
+ * Namespaces cached routes by trip to avoid leaking one trip's map into another.
+ */
 function routePlanCacheKey(activeTripId: string): string {
   return `trail-ledger-route-plan-v2:${activeTripId}`;
 }
 
+/**
+ * Returns the localStorage key for the user's last selected trip.
+ */
 function selectedTripCacheKey(): string {
   return "trail-ledger-selected-trip-v2";
 }
 
+/**
+ * Runtime guard for route plan objects restored from localStorage.
+ */
 function isCachedRoutePlan(value: unknown): value is ApiRoutePlan {
   if (!value || typeof value !== "object") {
     return false;
@@ -5471,6 +5906,10 @@ function isCachedRoutePlan(value: unknown): value is ApiRoutePlan {
   );
 }
 
+/**
+ * Normalizes a route plan from API/cache into a complete shape with safe
+ * defaults. This prevents stale cached data from crashing the map UI.
+ */
 function normalizeRoutePlan(value: ApiRoutePlan): ApiRoutePlan {
   const routePlan = value as Partial<ApiRoutePlan>;
   const waypoints = Array.isArray(routePlan.waypoints) ? routePlan.waypoints.map(normalizeRouteWaypoint).filter((waypoint): waypoint is ApiRouteWaypoint => waypoint !== null) : [];
@@ -5510,6 +5949,9 @@ function normalizeRoutePlan(value: ApiRoutePlan): ApiRoutePlan {
   };
 }
 
+/**
+ * Normalizes one route waypoint and drops it if it has no valid coordinate.
+ */
 function normalizeRouteWaypoint(value: ApiRouteWaypoint): ApiRouteWaypoint | null {
   const waypoint = value as Partial<ApiRouteWaypoint>;
 
@@ -5551,6 +5993,9 @@ function normalizeRouteWaypoint(value: ApiRouteWaypoint): ApiRouteWaypoint | nul
   };
 }
 
+/**
+ * Runtime guard for geographic coordinates.
+ */
 function isGeoPoint(value: unknown): value is ApiGeoPoint {
   if (!value || typeof value !== "object") {
     return false;
@@ -5560,14 +6005,25 @@ function isGeoPoint(value: unknown): value is ApiGeoPoint {
   return typeof point.lat === "number" && Number.isFinite(point.lat) && typeof point.lng === "number" && Number.isFinite(point.lng);
 }
 
+/**
+ * Runtime guard for supported route stop kinds.
+ */
 function isRouteStopKind(value: unknown): value is ApiRouteStopKind {
   return value === "fuel" || value === "rest" || value === "repair" || value === "border";
 }
 
+/**
+ * Returns finite numeric values and substitutes a fallback for bad cache/API
+ * data.
+ */
 function safeNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+/**
+ * Wraps browser geolocation in a Promise so route planning can await the user's
+ * current GPS position.
+ */
 function getCurrentBrowserPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
@@ -5584,12 +6040,18 @@ function getCurrentBrowserPosition(): Promise<GeolocationPosition> {
   });
 }
 
+/**
+ * Resolves a category id to its configured Lucide icon.
+ */
 function categoryIcon(category: string) {
   const item = categories.find((entry) => entry.id === category) ?? categories[0]!;
   const Icon = item.icon;
   return <Icon size={18} />;
 }
 
+/**
+ * Resolves a route stop kind to a compact icon for the waypoint timeline.
+ */
 function stopIcon(kind: ApiRouteStopKind) {
   if (kind === "fuel") {
     return <Fuel size={14} />;
@@ -5606,6 +6068,9 @@ function stopIcon(kind: ApiRouteStopKind) {
   return <Navigation size={14} />;
 }
 
+/**
+ * Converts weather source ids into short labels shown on waypoint cards.
+ */
 function weatherSourceLabel(source: NonNullable<ApiRouteWaypoint["weather"]["source"]>): string {
   if (source === "open-meteo") {
     return "Open-Meteo live";
@@ -5622,6 +6087,9 @@ type LeafletMapStatus = "loading" | "ready" | "error";
 type LocationWatchStatus = "idle" | "searching" | "watching" | "denied" | "unavailable";
 type LocationShareStatus = "idle" | "starting" | "sharing" | "denied" | "unavailable" | "error";
 
+/**
+ * Converts Leaflet load status into a map overlay message.
+ */
 function leafletMapStatusText(status: LeafletMapStatus): string {
   if (status === "error") {
     return "Không tải được bản đồ";
@@ -5630,6 +6098,9 @@ function leafletMapStatusText(status: LeafletMapStatus): string {
   return "Đang tải OpenStreetMap";
 }
 
+/**
+ * Converts browser GPS watch state into a rider-facing status line.
+ */
 function locationWatchStatusText(status: LocationWatchStatus): string {
   if (status === "searching") {
     return "Đang tìm vị trí GPS";
@@ -5650,6 +6121,9 @@ function locationWatchStatusText(status: LocationWatchStatus): string {
   return "";
 }
 
+/**
+ * Converts group GPS sharing state into a rider-facing status line.
+ */
 function locationShareStatusText(status: LocationShareStatus): string {
   if (status === "starting") {
     return "Đang xin GPS để chia sẻ cho nhóm";

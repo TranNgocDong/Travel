@@ -30,14 +30,23 @@ export interface MemberRouteRepository {
 export class InMemoryMemberRouteRepository implements MemberRouteRepository {
   private readonly routesByTrip = new Map<string, MemberRoute[]>();
 
+  /**
+   * Lists all member-owned routes for a trip in memory.
+   */
   async listByTrip(tripId: string): Promise<MemberRoute[]> {
     return [...(this.routesByTrip.get(tripId) ?? [])].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   }
 
+  /**
+   * Finds one in-memory member route by trip and route id.
+   */
   async findById(tripId: string, routeId: string): Promise<MemberRoute | null> {
     return (this.routesByTrip.get(tripId) ?? []).find((route) => route.id === routeId) ?? null;
   }
 
+  /**
+   * Saves or replaces the current user's route in memory.
+   */
   async save(input: SaveMemberRouteInput): Promise<MemberRoute> {
     const now = new Date().toISOString();
     const current = this.routesByTrip.get(input.tripId) ?? [];
@@ -55,6 +64,9 @@ export class InMemoryMemberRouteRepository implements MemberRouteRepository {
     return route;
   }
 
+  /**
+   * Removes an in-memory member route from a trip.
+   */
   async remove(tripId: string, routeId: string): Promise<void> {
     const current = this.routesByTrip.get(tripId) ?? [];
     this.routesByTrip.set(
@@ -67,6 +79,9 @@ export class InMemoryMemberRouteRepository implements MemberRouteRepository {
 export class PostgresMemberRouteRepository implements MemberRouteRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Lists all saved member-owned routes for a trip.
+   */
   async listByTrip(tripId: string): Promise<MemberRoute[]> {
     const result = await this.pool.query<MemberRouteRow>(
       `
@@ -81,6 +96,9 @@ export class PostgresMemberRouteRepository implements MemberRouteRepository {
     return result.rows.map(rowToMemberRoute);
   }
 
+  /**
+   * Finds a persisted member route within a trip boundary.
+   */
   async findById(tripId: string, routeId: string): Promise<MemberRoute | null> {
     const result = await this.pool.query<MemberRouteRow>(
       `
@@ -94,6 +112,9 @@ export class PostgresMemberRouteRepository implements MemberRouteRepository {
     return result.rows[0] ? rowToMemberRoute(result.rows[0]) : null;
   }
 
+  /**
+   * Upserts a user's private route while preserving one route per user per trip.
+   */
   async save(input: SaveMemberRouteInput): Promise<MemberRoute> {
     const result = await this.pool.query<MemberRouteRow>(
       `
@@ -112,6 +133,9 @@ export class PostgresMemberRouteRepository implements MemberRouteRepository {
     return rowToMemberRoute(result.rows[0]!);
   }
 
+  /**
+   * Deletes a saved member route.
+   */
   async remove(tripId: string, routeId: string): Promise<void> {
     await this.pool.query("DELETE FROM trip_member_routes WHERE trip_id = $1 AND id = $2", [tripId, routeId]);
   }
@@ -127,6 +151,9 @@ interface MemberRouteRow {
   updated_at: Date | string;
 }
 
+/**
+ * Converts a PostgreSQL member-route row into the API route model.
+ */
 function rowToMemberRoute(row: MemberRouteRow): MemberRoute {
   return {
     id: row.id,

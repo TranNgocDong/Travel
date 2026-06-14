@@ -39,6 +39,10 @@ interface OverpassResponse {
 const overpassEndpoint = "https://overpass-api.de/api/interpreter";
 const searchRadiusMeters = 3000;
 
+/**
+ * Finds food, lodging, and fuel POIs near sampled points on a route by querying
+ * Overpass/OpenStreetMap.
+ */
 export async function findOpenStreetMapPoisForRoute(routePlan: RoutePlan, options: FindRoutePoisOptions): Promise<TripPoi[]> {
   const routePoints = routePlan.geometry.length ? routePlan.geometry : routePlan.waypoints.map((waypoint) => waypoint.coordinate);
   const samplePoints = sampleRoutePoints(routePoints, 7);
@@ -77,6 +81,10 @@ export async function findOpenStreetMapPoisForRoute(routePlan: RoutePlan, option
     .slice(0, Math.max(1, Math.min(options.limit ?? 80, 120)));
 }
 
+/**
+ * Builds the Overpass query blocks for the requested POI kinds around route
+ * sample points.
+ */
 function buildOverpassQuery(points: GeoPoint[], kinds: TripPoiKind[]): string {
   const blocks: string[] = [];
   const wantsFood = kinds.includes("food");
@@ -105,6 +113,10 @@ function buildOverpassQuery(points: GeoPoint[], kinds: TripPoiKind[]): string {
   return `[out:json][timeout:14];(${blocks.join("\n")});out center 180;`;
 }
 
+/**
+ * Converts one Overpass element into a TrailLedger POI if it has a usable
+ * coordinate and matches the requested kinds.
+ */
 function toTripPoi(element: OverpassElement, routePoints: GeoPoint[], allowedKinds: TripPoiKind[]): TripPoi | null {
   const coordinate = readElementCoordinate(element);
   const kind = readPoiKind(element.tags ?? {});
@@ -129,6 +141,9 @@ function toTripPoi(element: OverpassElement, routePoints: GeoPoint[], allowedKin
   };
 }
 
+/**
+ * Reads a coordinate from either a node or a way/relation center.
+ */
 function readElementCoordinate(element: OverpassElement): GeoPoint | null {
   const lat = typeof element.lat === "number" ? element.lat : element.center?.lat;
   const lng = typeof element.lon === "number" ? element.lon : element.center?.lon;
@@ -140,6 +155,9 @@ function readElementCoordinate(element: OverpassElement): GeoPoint | null {
   return { lat, lng };
 }
 
+/**
+ * Maps OpenStreetMap tags into the small POI taxonomy used by the app.
+ */
 function readPoiKind(tags: Record<string, string>): TripPoiKind | null {
   if (tags.amenity === "fuel") {
     return "fuel";
@@ -156,6 +174,9 @@ function readPoiKind(tags: Record<string, string>): TripPoiKind | null {
   return null;
 }
 
+/**
+ * Picks the best display name for a POI and falls back to a kind-specific label.
+ */
 function readPoiName(tags: Record<string, string>, kind: TripPoiKind): string {
   const name = tags.name || tags["name:vi"] || tags.brand;
 
@@ -174,11 +195,17 @@ function readPoiName(tags: Record<string, string>, kind: TripPoiKind): string {
   return "Quán ăn";
 }
 
+/**
+ * Extracts a short detail string from useful OSM tags.
+ */
 function readPoiDetail(tags: Record<string, string>): string | null {
   const parts = [tags.cuisine, tags.tourism, tags.amenity, tags.operator].filter(Boolean).slice(0, 2);
   return parts.length ? parts.join(" · ") : null;
 }
 
+/**
+ * Samples route geometry evenly to keep Overpass requests small and fast.
+ */
 function sampleRoutePoints(points: GeoPoint[], maxPoints: number): GeoPoint[] {
   if (points.length <= maxPoints) {
     return points;
@@ -193,6 +220,9 @@ function sampleRoutePoints(points: GeoPoint[], maxPoints: number): GeoPoint[] {
   return sampled;
 }
 
+/**
+ * Estimates how far a POI is from the nearest sampled route point.
+ */
 function distanceToRouteKm(point: GeoPoint, routePoints: GeoPoint[]): number {
   if (!routePoints.length) {
     return 0;
@@ -201,6 +231,9 @@ function distanceToRouteKm(point: GeoPoint, routePoints: GeoPoint[]): number {
   return Math.min(...routePoints.map((routePoint) => haversineKm(point, routePoint)));
 }
 
+/**
+ * Calculates great-circle distance between two coordinates.
+ */
 function haversineKm(left: GeoPoint, right: GeoPoint): number {
   const earthRadiusKm = 6371;
   const dLat = degreesToRadians(right.lat - left.lat);
@@ -211,10 +244,16 @@ function haversineKm(left: GeoPoint, right: GeoPoint): number {
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * Converts degrees to radians for haversine math.
+ */
 function degreesToRadians(value: number): number {
   return (value * Math.PI) / 180;
 }
 
+/**
+ * Rounds route-distance labels to one decimal place.
+ */
 function roundToOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
 }

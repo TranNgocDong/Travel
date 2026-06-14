@@ -10,10 +10,16 @@ export interface RoutePlanRepository {
 export class InMemoryRoutePlanRepository implements RoutePlanRepository {
   private readonly routePlansByTrip = new Map<string, RoutePlan>();
 
+  /**
+   * Returns the current in-memory route plan for a trip.
+   */
   async findByTrip(tripId: string): Promise<RoutePlan | null> {
     return this.routePlansByTrip.get(tripId) ?? null;
   }
 
+  /**
+   * Saves the latest in-memory route plan for a trip.
+   */
   async save(tripId: string, _userId: string, routePlan: RoutePlan): Promise<RoutePlan> {
     this.routePlansByTrip.set(tripId, routePlan);
     return routePlan;
@@ -23,6 +29,9 @@ export class InMemoryRoutePlanRepository implements RoutePlanRepository {
 export class PostgresRoutePlanRepository implements RoutePlanRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Loads the persisted route plan for a trip.
+   */
   async findByTrip(tripId: string): Promise<RoutePlan | null> {
     const result = await this.pool.query<RoutePlanRow>(
       `
@@ -36,6 +45,9 @@ export class PostgresRoutePlanRepository implements RoutePlanRepository {
     return result.rows[0]?.route_plan ?? null;
   }
 
+  /**
+   * Upserts the persisted route plan and records which user updated it.
+   */
   async save(tripId: string, userId: string, routePlan: RoutePlan): Promise<RoutePlan> {
     const result = await this.pool.query<RoutePlanRow>(
       `

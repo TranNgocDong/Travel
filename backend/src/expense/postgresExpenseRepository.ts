@@ -17,6 +17,9 @@ interface ExpenseRow {
 export class PostgresExpenseRepository implements ExpenseRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Lists persisted expenses for a trip, newest first.
+   */
   async listByTrip(tripId: string): Promise<StoredExpense[]> {
     const result = await this.pool.query<ExpenseRow>(
       `
@@ -31,6 +34,10 @@ export class PostgresExpenseRepository implements ExpenseRepository {
     return result.rows.map(rowToExpense);
   }
 
+  /**
+   * Persists an expense idempotently using the client mutation id as the primary
+   * key.
+   */
   async add(tripId: string, expense: StoredExpense): Promise<StoredExpense> {
     // Expense ids are clientMutationIds when the browser retries offline expenses.
     // ON CONFLICT makes repeated submissions idempotent for the same trip, but rejects the same id on another trip.
@@ -66,6 +73,9 @@ export class PostgresExpenseRepository implements ExpenseRepository {
   }
 }
 
+/**
+ * Converts a Postgres expense row into the API/domain shape.
+ */
 function rowToExpense(row: ExpenseRow): StoredExpense {
   // Convert database column names and numeric strings into the API shape expected by the frontend.
   // Amount stays a string to avoid floating-point rounding issues in money calculations.
@@ -87,6 +97,9 @@ function rowToExpense(row: ExpenseRow): StoredExpense {
   };
 }
 
+/**
+ * Removes unnecessary trailing decimal zeros from Postgres numeric strings.
+ */
 function trimNumeric(value: string): string {
   return value.includes(".") ? value.replace(/\.?0+$/, "") : value;
 }

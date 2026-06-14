@@ -38,10 +38,19 @@ export const currencyRatesToVnd: Record<CurrencyCode, number> = {
   CNY: 3500,
 };
 
+/**
+ * Converts a user-entered amount into VND using the local fallback rate table.
+ * The backend performs the authoritative calculation; this is for responsive UI
+ * previews only.
+ */
 export function toVnd(amount: number, currency: CurrencyCode): number {
   return Math.round(amount * currencyRatesToVnd[currency]);
 }
 
+/**
+ * Formats money values with Vietnamese locale rules so expense cards stay easy
+ * to scan on mobile.
+ */
 export function formatMoney(amount: number, currency: CurrencyCode = "VND"): string {
   return new Intl.NumberFormat("vi-VN", {
     style: "currency",
@@ -50,6 +59,10 @@ export function formatMoney(amount: number, currency: CurrencyCode = "VND"): str
   }).format(amount);
 }
 
+/**
+ * Calculates local preview balances from the current expense list. Server
+ * settlements remain the source of truth when PostgreSQL data is available.
+ */
 export function calculateBalances(members: Member[], expenses: Expense[]): Balance[] {
   const balances = new Map(members.map((member) => [member.id, 0]));
 
@@ -70,6 +83,9 @@ export function calculateBalances(members: Member[], expenses: Expense[]): Balan
     .sort((left, right) => right.amountVnd - left.amountVnd);
 }
 
+/**
+ * Minimizes local settlement suggestions by matching debtors with creditors.
+ */
 export function calculateSettlements(balances: Balance[]): Settlement[] {
   const creditors = balances
     .filter((balance) => balance.amountVnd > 0)
@@ -118,6 +134,9 @@ export function calculateSettlements(balances: Balance[]): Settlement[] {
   return settlements;
 }
 
+/**
+ * Splits one expense into owed amounts according to the selected split mode.
+ */
 function calculateOwedAmounts(expense: Expense, totalVnd: number): Record<string, number> {
   if (expense.participantIds.length === 0) {
     return {};
@@ -144,6 +163,10 @@ function calculateOwedAmounts(expense: Expense, totalVnd: number): Record<string
   return allocateByWeights(totalVnd, shareEntries);
 }
 
+/**
+ * Allocates an integer total by weights while distributing rounding leftovers to
+ * the largest fractional remainders.
+ */
 function allocateByWeights(total: number, weights: ReadonlyArray<readonly [string, number]>): Record<string, number> {
   const weightTotal = weights.reduce((sum, [, weight]) => sum + weight, 0);
 

@@ -21,10 +21,17 @@ export class DuplicateExpenseIdError extends Error {
 export class InMemoryExpenseRepository implements ExpenseRepository {
   private readonly expensesByTrip = new Map<string, StoredExpense[]>();
 
+  /**
+   * Lists expenses for one trip from the in-memory store.
+   */
   async listByTrip(tripId: string): Promise<StoredExpense[]> {
     return [...(this.expensesByTrip.get(tripId) ?? [])];
   }
 
+  /**
+   * Adds an expense in memory and rejects mutation-id reuse across different
+   * trips.
+   */
   async add(tripId: string, expense: StoredExpense): Promise<StoredExpense> {
     for (const [storedTripId, expenses] of this.expensesByTrip.entries()) {
       const existing = expenses.find((item) => item.id === expense.id);

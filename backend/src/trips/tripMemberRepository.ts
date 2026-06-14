@@ -33,10 +33,16 @@ export interface TripMemberRepository {
 export class InMemoryTripMemberRepository implements TripMemberRepository {
   private readonly membersByTrip = new Map<string, TripMember[]>();
 
+  /**
+   * Lists all in-memory trip members, including soft-removed members for history.
+   */
   async listByTrip(tripId: string): Promise<TripMember[]> {
     return [...(this.membersByTrip.get(tripId) ?? [])];
   }
 
+  /**
+   * Adds a member to the in-memory room or reactivates a previously removed one.
+   */
   async add(tripId: string, member: TripMember): Promise<TripMember> {
     const current = this.membersByTrip.get(tripId) ?? [];
 
@@ -82,6 +88,9 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
     return activeMember;
   }
 
+  /**
+   * Updates an in-memory member profile or role.
+   */
   async update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null> {
     const current = this.membersByTrip.get(tripId) ?? [];
     const index = current.findIndex((member) => member.userId === userId);
@@ -108,6 +117,9 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
     return next;
   }
 
+  /**
+   * Soft-removes a member from the in-memory room.
+   */
   async remove(tripId: string, userId: string): Promise<void> {
     const current = this.membersByTrip.get(tripId) ?? [];
     const now = new Date().toISOString();
@@ -119,6 +131,9 @@ export class InMemoryTripMemberRepository implements TripMemberRepository {
 export class PostgresTripMemberRepository implements TripMemberRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Lists persisted trip members, keeping removed members for recap/audit views.
+   */
   async listByTrip(tripId: string): Promise<TripMember[]> {
     const result = await this.pool.query<MemberRow>(
       `
@@ -133,6 +148,9 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
     return result.rows.map(rowToMember);
   }
 
+  /**
+   * Adds a persisted member or reactivates an existing soft-removed membership.
+   */
   async add(tripId: string, member: TripMember): Promise<TripMember> {
     const result = await this.pool.query<MemberRow>(
       `
@@ -150,6 +168,10 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
     return rowToMember(result.rows[0]!);
   }
 
+  /**
+   * Updates a persisted member profile or role while preserving unspecified
+   * fields.
+   */
   async update(tripId: string, userId: string, patch: TripMemberPatch): Promise<TripMember | null> {
     // CASE WHEN flags let the API intentionally set nullable fields to null.
     // COALESCE alone would make "clear phone/home base" impossible because null would mean "do not update".
@@ -186,6 +208,10 @@ export class PostgresTripMemberRepository implements TripMemberRepository {
     return result.rows[0] ? rowToMember(result.rows[0]) : null;
   }
 
+  /**
+   * Soft-removes a persisted member so historical expenses and audit events stay
+   * readable.
+   */
   async remove(tripId: string, userId: string): Promise<void> {
     // Keep the row for recap/audit/history, but mark it inactive for current room operations.
     await this.pool.query("UPDATE trip_participants SET removed_at = now() WHERE trip_id = $1 AND user_id = $2", [tripId, userId]);
@@ -205,6 +231,9 @@ interface MemberRow {
   background_key: string | null;
 }
 
+/**
+ * Converts a Postgres row into the TripMember shape used by the API.
+ */
 function rowToMember(row: MemberRow): TripMember {
   // Normalize database rows into safe application values.
   // Unknown enum strings fall back to conservative defaults so bad data does not crash the UI.
@@ -223,14 +252,23 @@ function rowToMember(row: MemberRow): TripMember {
   };
 }
 
+/**
+ * Parses a stored travel status and falls back to a safe default when data is unknown.
+ */
 function parseTravelStatus(value: string | null): TripMemberTravelStatus {
   return value === "resting" || value === "need-help" || value === "offline" ? value : "riding";
 }
 
+/**
+ * Parses a stored avatar color and falls back to the default brand color.
+ */
 function parseAvatarColor(value: string | null): TripMemberAvatarColor {
   return value === "sky" || value === "green" || value === "amber" || value === "rose" || value === "violet" ? value : "teal";
 }
 
+/**
+ * Parses a stored profile background key and falls back to the default travel theme.
+ */
 function parseBackgroundKey(value: string | null): TripMemberBackgroundKey {
   return value === "coast" || value === "mountain" || value === "night" || value === "sunrise" ? value : "forest";
 }

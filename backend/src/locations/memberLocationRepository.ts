@@ -36,6 +36,9 @@ export interface TripMemberLocationRepository {
 export class InMemoryTripMemberLocationRepository implements TripMemberLocationRepository {
   private readonly locationsByTripUser = new Map<string, TripMemberLocation>();
 
+  /**
+   * Lists non-expired member locations for a trip from memory.
+   */
   async listActiveByTrip(tripId: string, now = new Date()): Promise<TripMemberLocation[]> {
     await this.pruneExpired(now);
 
@@ -44,6 +47,9 @@ export class InMemoryTripMemberLocationRepository implements TripMemberLocationR
       .sort((left, right) => Date.parse(right.sharedAt) - Date.parse(left.sharedAt));
   }
 
+  /**
+   * Saves the latest GPS location for a user in memory with a short TTL.
+   */
   async upsert(input: SaveTripMemberLocationInput, now = new Date()): Promise<TripMemberLocation> {
     const ttlSeconds = input.ttlSeconds ?? defaultLocationTtlSeconds;
     const location: TripMemberLocation = {
@@ -63,10 +69,16 @@ export class InMemoryTripMemberLocationRepository implements TripMemberLocationR
     return location;
   }
 
+  /**
+   * Stops sharing one user's in-memory location.
+   */
   async remove(tripId: string, userId: string): Promise<void> {
     this.locationsByTripUser.delete(locationKey(tripId, userId));
   }
 
+  /**
+   * Deletes expired in-memory locations so stale GPS does not remain visible.
+   */
   async pruneExpired(now = new Date()): Promise<void> {
     const cutoff = now.getTime();
 
@@ -81,6 +93,9 @@ export class InMemoryTripMemberLocationRepository implements TripMemberLocationR
 export class PostgresTripMemberLocationRepository implements TripMemberLocationRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Lists non-expired member GPS points for a trip from PostgreSQL.
+   */
   async listActiveByTrip(tripId: string, now = new Date()): Promise<TripMemberLocation[]> {
     const result = await this.pool.query<LocationRow>(
       `
@@ -109,6 +124,9 @@ export class PostgresTripMemberLocationRepository implements TripMemberLocationR
     return result.rows.map(rowToLocation);
   }
 
+  /**
+   * Upserts a user's current GPS location with an expiry timestamp.
+   */
   async upsert(input: SaveTripMemberLocationInput, now = new Date()): Promise<TripMemberLocation> {
     const ttlSeconds = input.ttlSeconds ?? defaultLocationTtlSeconds;
     const result = await this.pool.query<LocationRow>(
@@ -161,10 +179,16 @@ export class PostgresTripMemberLocationRepository implements TripMemberLocationR
     return rowToLocation(result.rows[0]!);
   }
 
+  /**
+   * Stops sharing one user's persisted location.
+   */
   async remove(tripId: string, userId: string): Promise<void> {
     await this.pool.query("DELETE FROM trip_member_locations WHERE trip_id = $1 AND user_id = $2", [tripId, userId]);
   }
 
+  /**
+   * Removes expired GPS rows from PostgreSQL.
+   */
   async pruneExpired(now = new Date()): Promise<void> {
     await this.pool.query("DELETE FROM trip_member_locations WHERE expires_at <= $1", [now]);
   }
@@ -183,6 +207,9 @@ interface LocationRow {
   expires_at: Date | string;
 }
 
+/**
+ * Converts a PostgreSQL GPS row into the API location model.
+ */
 function rowToLocation(row: LocationRow): TripMemberLocation {
   return {
     tripId: row.trip_id,
@@ -198,14 +225,23 @@ function rowToLocation(row: LocationRow): TripMemberLocation {
   };
 }
 
+/**
+ * Converts numeric database values to numbers while preserving null.
+ */
 function nullableNumber(value: number | string | null): number | null {
   return value === null ? null : Number(value);
 }
 
+/**
+ * Normalizes Date/string values from PostgreSQL into ISO strings.
+ */
 function dateToIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+/**
+ * Builds the in-memory key for one user's location in one trip.
+ */
 function locationKey(tripId: string, userId: string): string {
   return `${tripId}:${userId}`;
 }

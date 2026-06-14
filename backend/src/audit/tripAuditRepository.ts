@@ -45,6 +45,9 @@ export interface TripAuditRepository {
 export class InMemoryTripAuditRepository implements TripAuditRepository {
   private readonly eventsByTrip = new Map<string, TripAuditEvent[]>();
 
+  /**
+   * Stores an audit event in memory for local/demo runs without PostgreSQL.
+   */
   async create(input: CreateTripAuditEventInput): Promise<TripAuditEvent> {
     const event: TripAuditEvent = {
       id: input.id,
@@ -62,6 +65,9 @@ export class InMemoryTripAuditRepository implements TripAuditRepository {
     return event;
   }
 
+  /**
+   * Returns the latest in-memory audit events for a trip, newest first.
+   */
   async listByTrip(tripId: string, limit = 80): Promise<TripAuditEvent[]> {
     return [...(this.eventsByTrip.get(tripId) ?? [])]
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
@@ -72,6 +78,10 @@ export class InMemoryTripAuditRepository implements TripAuditRepository {
 export class PostgresTripAuditRepository implements TripAuditRepository {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * Persists a trip audit event to PostgreSQL so sensitive membership and trip
+   * mutations remain traceable.
+   */
   async create(input: CreateTripAuditEventInput): Promise<TripAuditEvent> {
     const result = await this.pool.query<TripAuditEventRow>(
       `
@@ -94,6 +104,10 @@ export class PostgresTripAuditRepository implements TripAuditRepository {
     return rowToTripAuditEvent(result.rows[0]!);
   }
 
+  /**
+   * Loads recent trip audit events with a clamped limit to avoid oversized API
+   * responses.
+   */
   async listByTrip(tripId: string, limit = 80): Promise<TripAuditEvent[]> {
     const result = await this.pool.query<TripAuditEventRow>(
       `
@@ -122,6 +136,9 @@ interface TripAuditEventRow {
   created_at: Date | string;
 }
 
+/**
+ * Converts the snake_case PostgreSQL row into the camelCase API model.
+ */
 function rowToTripAuditEvent(row: TripAuditEventRow): TripAuditEvent {
   return {
     id: row.id,
@@ -136,6 +153,9 @@ function rowToTripAuditEvent(row: TripAuditEventRow): TripAuditEvent {
   };
 }
 
+/**
+ * Bounds audit pagination to a safe range for both memory and database reads.
+ */
 function clampAuditLimit(limit: number): number {
   if (!Number.isFinite(limit)) {
     return 80;

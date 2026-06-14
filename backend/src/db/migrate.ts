@@ -4,6 +4,10 @@ import { pathToFileURL } from "node:url";
 
 import { createPool } from "./config.js";
 
+/**
+ * Applies pending SQL migrations exactly once by tracking filenames in the
+ * schema_migrations table.
+ */
 export async function runMigrations() {
   const pool = createPool();
   const client = await pool.connect();
